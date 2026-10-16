@@ -182,6 +182,10 @@ jobs:
           npm install --prefix .ci-tools/typescript --no-audit --no-fund typescript@5.9.3
           & .ci-tools\typescript\node_modules\.bin\tsc.cmd --version
 
+      - name: Prepare plugin workspace dependencies
+        shell: pwsh
+        run: corepack pnpm --dir plugins/packages/buildin/workflow install --frozen-lockfile
+
       - name: Build and package Android app
         shell: pwsh
         run: |
