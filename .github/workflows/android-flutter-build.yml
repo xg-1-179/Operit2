@@ -180,8 +180,7 @@ jobs:
         shell: pwsh
         run: |
           npm install --prefix .ci-tools/typescript --no-audit --no-fund typescript@5.9.3
-          & .ci-tools	ypescript
-ode_modules\.bin	sc.cmd --version
+          & .ci-tools\typescript\node_modules\.bin\tsc.cmd --version
 
       - name: Build and package Android app
         shell: pwsh
