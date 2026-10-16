@@ -182,9 +182,28 @@ jobs:
           npm install --prefix .ci-tools/typescript --no-audit --no-fund typescript@5.9.3
           & .ci-tools\typescript\node_modules\.bin\tsc.cmd --version
 
-      - name: Prepare plugin workspace dependencies
+      - name: Prepare pinned plugin workspace dependencies
+        working-directory: plugins/packages/buildin/workflow
         shell: pwsh
-        run: corepack pnpm --dir plugins/packages/buildin/workflow install --frozen-lockfile
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          corepack prepare pnpm@10.7.0 --activate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = (corepack pnpm --version).Trim()
+          if ($version -ne "10.7.0") { throw "Expected pnpm 10.7.0, got $version" }
+          corepack pnpm install --frozen-lockfile --prod=false
+
+      - name: Preflight runtime plugins, locked dependencies and signing
+        shell: pwsh
+        run: python tools/build_scripts/android_ci_preflight.py
+
+      - name: Preflight Android native compilation, Gradle and signing
+        working-directory: apps/flutter/app/android
+        shell: pwsh
+        run: ./gradlew.bat :app:validateSigningRelease :app:verifyOperitAndroidRuntimeArtifacts :app:cargoBuildOperitFlutterBridgeReleasearm64v8a -Ptarget-platform=android-arm64 -Psplit-per-abi=true -Pbuild-mode=release --console=plain
 
       - name: Build and package Android app
         shell: pwsh
@@ -195,10 +214,26 @@ jobs:
           }
           python tools/build_scripts/build_flutter_android.py --build-name $version[0].Groups[1].Value --build-number $version[0].Groups[2].Value --enforce-lockfile
 
+      - name: Verify APK ARM64 contents and release certificate
+        shell: pwsh
+        run: python tools/build_scripts/verify_android_ci_apk.py
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operit2-android-diagnostics-${{ github.sha }}
+          path: target/android-ci-preflight.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: operit2-android-${{ github.sha }}
-          path: tools/release/dist/operit2-app-android-arm64-v8a.apk
+          path: |
+            tools/release/dist/operit2-app-android-arm64-v8a.apk
+            tools/release/dist/operit2-app-android-arm64-v8a.apk.sha256
+            tools/release/dist/operit2-app-android-arm64-v8a.verification.json
           if-no-files-found: error
           retention-days: 14
