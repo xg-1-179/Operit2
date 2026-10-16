@@ -1,0 +1,11 @@
+{
+  "source": "https://gitee.com/openharmony-sig/flutter_packages.git",
+  "commit": "35fb467533e174411a117b2a030c15d2a3a9687c",
+  "sha256": "3d1677e7a883d58122968529149e4af8ed5d9495a5bff21d5f07c35bb5f3edfe",
+  "packages": {
+    "path_provider_ohos": "packages/path_provider/path_provider_ohos",
+    "url_launcher_ohos": "packages/url_launcher/url_launcher_ohos",
+    "video_player_ohos": "packages/video_player/video_player_ohos"
+  },
+  "purpose": "Exact pinned sources for GitHub Actions runners unable to reach Gitee"
+}

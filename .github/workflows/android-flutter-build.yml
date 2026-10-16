@@ -162,6 +162,10 @@ jobs:
           RELEASE_KEY_PASSWORD=$env:ANDROID_RELEASE_KEY_PASSWORD
           "@ | Set-Content -Path (Join-Path $secretsDir "android-signing.properties") -Encoding utf8
 
+      - name: Prepare pinned Flutter dependencies
+        shell: pwsh
+        run: python tools/build_scripts/prepare_android_ci_dependencies.py
+
       - name: Check build environment
         shell: pwsh
         run: python tools/build_scripts/check_build_environment.py --products app --github-runner
