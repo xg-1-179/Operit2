@@ -166,6 +166,14 @@ jobs:
         shell: pwsh
         run: python tools/build_scripts/prepare_android_ci_dependencies.py
 
+      - name: Test DSH compatibility
+        working-directory: tools/dsh-compat
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test
+
       - name: Check build environment
         shell: pwsh
         run: python tools/build_scripts/check_build_environment.py --products app --github-runner
@@ -199,6 +207,20 @@ jobs:
       - name: Preflight runtime plugins, locked dependencies and signing
         shell: pwsh
         run: python tools/build_scripts/android_ci_preflight.py
+
+      - name: Test client logging batching
+        working-directory: apps/flutter/app
+        shell: pwsh
+        run: fvm flutter test test/client_logger_batching_test.dart test/runtime_bootstrap_logging_test.dart
+
+      - name: Test glass interactions
+        working-directory: apps/flutter/packages/operit_ui
+        shell: pwsh
+        run: |
+          $flutter = Join-Path $env:GITHUB_WORKSPACE "apps/flutter/app/.fvm/flutter_sdk/bin/flutter.bat"
+          & $flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $flutter test test/input_glass_interaction_test.dart
 
       - name: Preflight Android native compilation, Gradle and signing
         working-directory: apps/flutter/app/android

@@ -55,6 +55,12 @@ class ToolsService {
     this.definitions = runtimeTools;
   }
 
+  forContext(context) {
+    const scoped = Object.create(this);
+    scoped.ctx = context;
+    return scoped;
+  }
+
   register(definition) {
     if (!definition || typeof definition !== 'object') {
       throw new Error('ctx.tools.register requires a definition object');
@@ -71,10 +77,13 @@ class ToolsService {
       parameters: normalizeParameters(definition.parameters || definition.schema),
       handler,
     };
-    runtimeTools.set(name, entry);
-    return () => {
-      if (runtimeTools.get(name) === entry) runtimeTools.delete(name);
-    };
+    return this.ctx.effect(() => {
+      if (runtimeTools.has(name)) throw new Error(`Tool is already registered: ${name}`);
+      runtimeTools.set(name, entry);
+      return () => {
+        if (runtimeTools.get(name) === entry) runtimeTools.delete(name);
+      };
+    });
   }
 
   list() {
@@ -221,7 +230,7 @@ export function bootDshPlugin(mount) {
   globalThis.__operitDshRuntime = booted;
   if (typeof ToolPkg.onUnload === 'function') {
     ToolPkg.onUnload(async () => {
-      root.dispose();
+      await root.dispose();
       runtimeTools.clear();
       globalThis.__operitDshRuntime = undefined;
     });
@@ -231,6 +240,7 @@ export function bootDshPlugin(mount) {
 
 // Invoked by generated ToolPkg tool wrappers.
 export async function invokeRuntimeTool(name, args) {
+  await globalThis.__operitDshRuntime?.fiber.ready;
   const entry = runtimeTools.get(name);
   if (!entry) throw new Error(`Runtime tool is not registered: ${name}`);
   return entry.handler(args || {});

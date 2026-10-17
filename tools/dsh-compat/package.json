@@ -1,0 +1,7 @@
+{
+  "name": "operit-dsh-compat",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "dependencies": { "esbuild": "0.25.12", "fflate": "0.8.3" }
+}

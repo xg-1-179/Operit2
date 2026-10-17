@@ -17,6 +17,7 @@ String? _logPath;
 bool _persistentStorageRequested = false;
 final List<String> _pendingLines = <String>[];
 Future<void> _writeQueue = Future<void>.value();
+bool _writeScheduled = false;
 String? _lastWriteError;
 
 /// Initializes the memory-backed logger backend.
@@ -104,8 +105,16 @@ void write(
 
 /// Schedules one ordered write pass for the runtime-storage sink.
 void _schedulePersistentWrite() {
+  if (!_persistentStorageRequested || _writeScheduled) {
+    return;
+  }
+  _writeScheduled = true;
   _writeQueue = _writeQueue
-      .then((_) => _flushPendingLines())
+      .then((_) {
+        // Allow one follow-up batch while this batch awaits native storage.
+        _writeScheduled = false;
+        return _flushPendingLines();
+      })
       .then<void>((_) {
         _lastWriteError = null;
       })

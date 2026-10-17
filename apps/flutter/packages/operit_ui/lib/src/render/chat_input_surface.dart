@@ -89,38 +89,11 @@ class AgentInputSurface extends StatelessWidget {
     final Widget surface;
     if (transparentSurface && !useImage) {
       final settings = _inputTransparentGlassSettings(context);
-      surface = ClipPath(
-        clipper: ShapeBorderClipper(shape: shape),
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(
-                  sigmaX: settings.blur,
-                  sigmaY: settings.blur,
-                ),
-                child: const ColoredBox(color: Colors.transparent),
-              ),
-            ),
-            Positioned.fill(
-              child: GlassEffect(
-                quality: GlassQuality.standard,
-                shape: LiquidRoundedSuperellipse(
-                  borderRadius: borderRadius.topLeft.x,
-                ),
-                settings: settings,
-                interactionIntensity: 0.85,
-                ambientRim: 0.11,
-                baseAlphaMultiplier: 0.75,
-                edgeAlphaMultiplier: 0.75,
-                rimThickness: 1.48,
-                rimSmoothing: 8,
-                child: const SizedBox.expand(),
-              ),
-            ),
-            decorated,
-          ],
-        ),
+      surface = _InteractiveInputGlass(
+        shape: shape,
+        borderRadius: borderRadius,
+        settings: settings,
+        child: decorated,
       );
     } else {
       surface = decorated;
@@ -226,38 +199,11 @@ class ClassicInputSurface extends StatelessWidget {
     final Widget surface;
     if (transparentSurface && !useImage) {
       final settings = _classicInputGlassSettings(context);
-      surface = ClipPath(
-        clipper: ShapeBorderClipper(shape: shape),
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(
-                  sigmaX: settings.blur,
-                  sigmaY: settings.blur,
-                ),
-                child: const ColoredBox(color: Colors.transparent),
-              ),
-            ),
-            Positioned.fill(
-              child: GlassEffect(
-                quality: GlassQuality.standard,
-                shape: LiquidRoundedSuperellipse(
-                  borderRadius: borderRadius.topLeft.x,
-                ),
-                settings: settings,
-                interactionIntensity: 0.85,
-                ambientRim: 0.11,
-                baseAlphaMultiplier: 0.75,
-                edgeAlphaMultiplier: 0.75,
-                rimThickness: 1.48,
-                rimSmoothing: 8,
-                child: const SizedBox.expand(),
-              ),
-            ),
-            decorated,
-          ],
-        ),
+      surface = _InteractiveInputGlass(
+        shape: shape,
+        borderRadius: borderRadius,
+        settings: settings,
+        child: decorated,
       );
     } else {
       surface = decorated;
@@ -288,4 +234,116 @@ LiquidGlassSettings _classicInputGlassSettings(BuildContext context) {
     specularSharpness: GlassSpecularSharpness.soft,
     standardOpacityMultiplier: 0.12,
   );
+}
+
+class _InteractiveInputGlass extends StatefulWidget {
+  const _InteractiveInputGlass({
+    required this.shape,
+    required this.borderRadius,
+    required this.settings,
+    required this.child,
+  });
+
+  final ShapeBorder shape;
+  final BorderRadius borderRadius;
+  final LiquidGlassSettings settings;
+  final Widget child;
+
+  @override
+  State<_InteractiveInputGlass> createState() => _InteractiveInputGlassState();
+}
+
+class _InteractiveInputGlassState extends State<_InteractiveInputGlass> {
+  final Set<int> _pointers = <int>{};
+  bool _hovered = false;
+
+  void _press(int pointer) {
+    final wasPressed = _pointers.isNotEmpty;
+    _pointers.add(pointer);
+    if (!wasPressed) setState(() {});
+  }
+
+  void _release(int pointer) {
+    if (_pointers.remove(pointer) && _pointers.isEmpty) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.accessibleNavigationOf(context);
+    final opaque = MediaQuery.highContrastOf(context);
+    final pressed = _pointers.isNotEmpty;
+    final active = pressed || _hovered;
+    final duration = reducedMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Listener(
+        onPointerDown: (event) => _press(event.pointer),
+        onPointerUp: (event) => _release(event.pointer),
+        onPointerCancel: (event) => _release(event.pointer),
+        child: AnimatedScale(
+          scale: pressed && !reducedMotion ? 0.995 : 1,
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          child: ClipPath(
+            clipper: ShapeBorderClipper(shape: widget.shape),
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: opaque
+                      ? ColoredBox(color: scheme.surface)
+                      : BackdropFilter(
+                          filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                          child: ColoredBox(
+                            color: scheme.surface.withValues(alpha: 0.72),
+                          ),
+                        ),
+                ),
+                if (!opaque)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: GlassEffect(
+                        quality: GlassQuality.standard,
+                        shape: LiquidRoundedSuperellipse(
+                          borderRadius: widget.borderRadius.topLeft.x,
+                        ),
+                        settings: widget.settings,
+                        // Resting glass must not keep a background capture ticker alive.
+                        interactionIntensity: pressed && !reducedMotion ? 0.6 : 0,
+                        ambientRim: 0.11,
+                        baseAlphaMultiplier: 0.75,
+                        edgeAlphaMultiplier: 0.75,
+                        rimThickness: 1.48,
+                        rimSmoothing: 8,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                widget.child,
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedContainer(
+                      duration: duration,
+                      decoration: BoxDecoration(
+                        borderRadius: widget.borderRadius,
+                        border: Border.all(
+                          color: active
+                              ? scheme.primary.withValues(alpha: 0.35)
+                              : scheme.onSurface.withValues(alpha: 0.10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -69,3 +69,25 @@ test('mounted plugin registers a runtime tool and unwinds it on unload', async (
   assert.equal(runtimeTools.size, 0);
   delete globalThis.__operitDshRuntime;
 });
+
+test('tools follow their owning fiber through suspension and reactivation', async () => {
+  const root = createHostContext();
+  const remove = root.provide('provider', {});
+  const fiber = root.plugin({
+    inject: ['provider'],
+    async apply(ctx) {
+      await Promise.resolve();
+      ctx.tools.register({ name: 'owned', handler: () => 'ok' });
+    },
+  });
+  await fiber.ready;
+  assert.ok(runtimeTools.has('owned'));
+  remove();
+  await fiber._stopping;
+  assert.equal(runtimeTools.has('owned'), false);
+  root.provide('provider', {});
+  await fiber.ready;
+  assert.ok(runtimeTools.has('owned'));
+  await root.dispose();
+  assert.equal(runtimeTools.has('owned'), false);
+});

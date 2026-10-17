@@ -94,11 +94,12 @@ class _AgentInputMenuPopupState extends State<AgentInputMenuPopup> {
           widget.viewModel != viewModel) {
         return;
       }
-      final signature = jsonEncode(_menuData(settings).toJson());
+      final data = _menuData(settings);
+      final signature = jsonEncode(data.toJson());
       if (_settingsSignature != signature) {
         _settingsSignature = signature;
         setState(() {
-          _settingsFuture = Future.value(_menuData(settings));
+          _settingsFuture = Future.value(data);
         });
       }
     } catch (error) {
@@ -110,10 +111,17 @@ class _AgentInputMenuPopupState extends State<AgentInputMenuPopup> {
 
   /// Reads native composer settings without consuming retired plugin-domain flags.
   Future<_AgentInputMenuData> _loadSettings() async {
-    final settings = await widget.viewModel.chatCore.chatInputMenuSettings(
-      chatId: widget.currentChatId,
+    final chatId = widget.currentChatId;
+    final viewModel = widget.viewModel;
+    final settings = await viewModel.chatCore.chatInputMenuSettings(
+      chatId: chatId,
     );
-    return _menuData(settings);
+    final data = _menuData(settings);
+    if (mounted && widget.currentChatId == chatId &&
+        widget.viewModel == viewModel) {
+      _settingsSignature = jsonEncode(data.toJson());
+    }
+    return data;
   }
 
   /// Selects only host-owned behavior and actual registered plugin contributions.
@@ -344,6 +352,7 @@ class _ChatSessionSummarySectionState
   int _currentWindowSize = 0;
   int _inputTokenCount = 0;
   int _outputTokenCount = 0;
+  double? _lastMaxContextLength;
   bool _statsExpanded = false;
   bool _presentingContextAction = false;
 
@@ -356,16 +365,7 @@ class _ChatSessionSummarySectionState
       if (_pollingSummary) return;
       _pollingSummary = true;
       try {
-        final chatId = widget.currentChatId;
-        final viewModel = widget.viewModel;
-        final value = await _loadSummary();
-        if (mounted &&
-            widget.currentChatId == chatId &&
-            widget.viewModel == viewModel) {
-          setState(() {
-            _maxContextLengthFuture = Future.value(value);
-          });
-        }
+        await _loadSummary(refresh: true);
       } catch (error) {
         debugPrint('Chat menu summary refresh: $error');
       } finally {
@@ -383,6 +383,7 @@ class _ChatSessionSummarySectionState
       _currentWindowSize = 0;
       _inputTokenCount = 0;
       _outputTokenCount = 0;
+      _lastMaxContextLength = null;
       _maxContextLengthFuture = _loadSummary();
     }
   }
@@ -496,7 +497,7 @@ class _ChatSessionSummarySectionState
   );
 
   /// Reads native token statistics without consulting any plugin domain records.
-  Future<double> _loadSummary() async {
+  Future<double> _loadSummary({bool refresh = false}) async {
     final chatId = widget.currentChatId;
     final viewModel = widget.viewModel;
     final summary = await viewModel.chatCore.chatInputMenuSummary(
@@ -504,11 +505,19 @@ class _ChatSessionSummarySectionState
     );
     if (mounted &&
         widget.currentChatId == chatId &&
-        widget.viewModel == viewModel) {
+        widget.viewModel == viewModel &&
+        (_currentWindowSize != summary.currentWindowSize ||
+            _inputTokenCount != summary.inputTokenCount ||
+            _outputTokenCount != summary.outputTokenCount ||
+            _lastMaxContextLength != summary.maxContextLength)) {
       setState(() {
         _currentWindowSize = summary.currentWindowSize;
         _inputTokenCount = summary.inputTokenCount;
         _outputTokenCount = summary.outputTokenCount;
+        _lastMaxContextLength = summary.maxContextLength;
+        if (refresh) {
+          _maxContextLengthFuture = Future.value(summary.maxContextLength);
+        }
       });
     }
     return summary.maxContextLength;

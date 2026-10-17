@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex};
 use super::OpenAIProvider::{StreamingJsonXmlConverter, StreamingJsonXmlEvent};
 use super::OpenAIResponsesProvider::strip_responses_protocol_markup;
 use super::StructuredToolCallBridge::{OpenToolCall, StructuredToolCallBridge};
-use super::StreamingResponseLines::{decodeStreamingTail, takeNextStreamingLine};
+use super::StreamingResponseLines::{
+    decodeStreamingTail, takeNextStreamingLine, StreamingLineBuffer,
+};
 use super::ThinkingConfiguration::ThinkingConfigurationApplier;
 use crate::chat::llmprovider::AIService::{
     response_stream_from_chunks, retry_error_text, retry_message, AIService, AiServiceError,
@@ -906,7 +908,7 @@ impl GeminiProvider {
         response: reqwest::Response,
     ) -> Result<Box<dyn RevisableTextStreamLike>, AiServiceError> {
         let mut chunks = Vec::new();
-        let mut pending_bytes = Vec::new();
+        let mut pending_bytes = StreamingLineBuffer::new();
         let mut bytes_stream = response.bytes_stream();
         while let Some(item) = bytes_stream.next().await {
             if self.is_cancelled() {

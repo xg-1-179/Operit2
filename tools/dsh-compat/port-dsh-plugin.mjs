@@ -7,9 +7,9 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,15 +50,18 @@ globalThis.Tools = {
 };
 globalThis.ToolPkg = { onUnload: () => {} };
 globalThis.getPluginConfigDir = () => '/dsh-config';
-await import(${JSON.stringify(bundlePath)});
+await import(${JSON.stringify(pathToFileURL(bundlePath).href)});
 if (typeof globalThis.__dshBoot !== 'function') throw new Error('bundle did not expose __dshBoot');
-await globalThis.__dshBoot();
-await new Promise(resolve => setTimeout(resolve, 50));
+const runtime = globalThis.__dshBoot();
+await runtime.fiber.ready;
+const missing = globalThis.__dshMissingServices();
+if (missing.length) throw new Error('Unsupported required services: ' + missing.join(', '));
+if (runtime.fiber.error) throw runtime.fiber.error;
 console.log(JSON.stringify(globalThis.__dshToolList()));
 `;
   const scriptPath = path.join(path.dirname(bundlePath), 'capture.mjs');
   await writeFile(scriptPath, harness, 'utf8');
-  const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8', timeout: 15000 });
   if (result.status !== 0) {
     console.error(result.stdout);
     console.error(result.stderr);
@@ -104,18 +107,21 @@ async function main() {
   if (!existsSync(entry)) fail(`missing plugin entry: ${entry}`);
 
   const outDir = path.resolve(args.out || path.join('build', `${packageName}.toolpkg.src`));
-  await rm(outDir, { recursive: true, force: true });
+  if (existsSync(outDir) && (await readdir(outDir)).length) {
+    fail(`output directory must be empty: ${outDir}`);
+  }
   await mkdir(path.join(outDir, 'dist'), { recursive: true });
   const buildDir = path.join(outDir, '.dsh-build');
   await mkdir(buildDir, { recursive: true });
 
   const wrapperPath = path.join(buildDir, 'entry.mjs');
   await writeFile(wrapperPath, `
-import * as pluginModule from ${JSON.stringify(entry)};
-import { bootDshPlugin, invokeRuntimeTool, runtimeTools } from ${JSON.stringify(path.join(here, 'dsh-shim.mjs'))};
+import * as pluginModule from ${JSON.stringify(entry.replaceAll('\\', '/'))};
+import { bootDshPlugin, invokeRuntimeTool, runtimeTools, unresolvedServices } from ${JSON.stringify(path.join(here, 'dsh-shim.mjs').replaceAll('\\', '/'))};
 const mount = pluginModule.default || pluginModule.plugin || pluginModule;
 globalThis.__dshBoot = () => bootDshPlugin(mount);
 globalThis.__dshToolList = () => [...runtimeTools.values()].map(({ name, description, parameters }) => ({ name, description, parameters }));
+globalThis.__dshMissingServices = () => unresolvedServices(bootDshPlugin(mount).root);
 globalThis.__dshInvokeTool = async (name, payload) => { bootDshPlugin(mount); return invokeRuntimeTool(name, payload); };
 globalThis.__dshPluginMeta = ${JSON.stringify({ name: packageName, version: packageJson.version || '0.0.0', dsh: packageJson.dsh || null })};
 `, 'utf8');
@@ -132,6 +138,7 @@ globalThis.__dshPluginMeta = ${JSON.stringify({ name: packageName, version: pack
     legalComments: 'none',
     logLevel: 'error',
     define: { 'process.env.NODE_ENV': '"production"' },
+    alias: { cordis: path.join(here, 'cordis-core.mjs') },
   });
 
   const tools = await captureTools(bundlePath);

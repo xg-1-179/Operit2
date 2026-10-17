@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../assets/theme_asset_resolver.dart';
 
+Duration _composerMotion(BuildContext context, int milliseconds) =>
+    MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.accessibleNavigationOf(context)
+    ? Duration.zero
+    : Duration(milliseconds: milliseconds);
+
 class ThemeComposerHorizontalVisibility extends StatelessWidget {
   const ThemeComposerHorizontalVisibility({
     super.key,
@@ -21,7 +27,7 @@ class ThemeComposerHorizontalVisibility extends StatelessWidget {
     child: AnimatedContainer(
       width: visible ? width : 0,
       height: height,
-      duration: const Duration(milliseconds: 220),
+      duration: _composerMotion(context, 180),
       curve: Curves.easeOutCubic,
       alignment: alignment,
       child: OverflowBox(
@@ -146,8 +152,8 @@ class ThemeClassicComposerBody extends StatelessWidget {
   final Widget action;
   @override
   Widget build(BuildContext context) => AnimatedSize(
-    duration: const Duration(milliseconds: 340),
-    reverseDuration: const Duration(milliseconds: 300),
+    duration: _composerMotion(context, 220),
+    reverseDuration: _composerMotion(context, 180),
     curve: Curves.easeInOutCubicEmphasized,
     alignment: Alignment.bottomCenter,
     child: Row(
@@ -440,8 +446,8 @@ class ThemeComposerTextEditor extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return AnimatedSize(
-      duration: const Duration(milliseconds: 340),
-      reverseDuration: const Duration(milliseconds: 300),
+      duration: _composerMotion(context, 220),
+      reverseDuration: _composerMotion(context, 180),
       curve: Curves.easeInOutCubicEmphasized,
       alignment: Alignment.bottomCenter,
       child: Stack(
@@ -614,6 +620,7 @@ class ThemeComposerActionButton extends StatelessWidget {
           else
             Material(
               color: background,
+              animationDuration: _composerMotion(context, 160),
               shape: const CircleBorder(),
               child: InkWell(
                 customBorder: const CircleBorder(),
@@ -621,7 +628,19 @@ class ThemeComposerActionButton extends StatelessWidget {
                 child: SizedBox(
                   width: contentSize,
                   height: contentSize,
-                  child: Icon(icon, size: iconSize, color: foreground),
+                  child: AnimatedSwitcher(
+                    duration: _composerMotion(context, 160),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: animation, child: child),
+                    ),
+                    child: Icon(
+                      icon,
+                      key: ValueKey<IconData>(icon),
+                      size: iconSize,
+                      color: foreground,
+                    ),
+                  ),
                 ),
               ),
             ),

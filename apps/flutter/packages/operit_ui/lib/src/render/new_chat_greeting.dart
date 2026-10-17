@@ -26,12 +26,15 @@ class ThemeNewChatGreeting extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              greeting,
-              style: textTheme.headlineSmall!.copyWith(
-                color: scheme.primary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 2,
+            Flexible(
+              child: Text(
+                greeting,
+                textAlign: TextAlign.center,
+                style: textTheme.headlineSmall!.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
               ),
             ),
             const SizedBox(width: 3),
@@ -46,6 +49,7 @@ class ThemeNewChatGreeting extends StatelessWidget {
           opacity: subtitleVisible ? 1 : 0,
           child: Text(
             subtitle,
+            textAlign: TextAlign.center,
             style: textTheme.bodySmall!.copyWith(
               color: scheme.onSurfaceVariant,
             ),

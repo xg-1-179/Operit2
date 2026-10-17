@@ -7,7 +7,9 @@ use std::sync::{Arc, Mutex};
 use super::OpenAIProvider::{StreamingJsonXmlConverter, StreamingJsonXmlEvent};
 use super::OpenAIResponsesProvider::strip_responses_protocol_markup;
 use super::StructuredToolCallBridge::StructuredToolCallBridge;
-use super::StreamingResponseLines::{decodeStreamingTail, takeNextStreamingLine};
+use super::StreamingResponseLines::{
+    decodeStreamingTail, takeNextStreamingLine, StreamingLineBuffer,
+};
 use super::ThinkingConfiguration::ThinkingConfigurationApplier;
 use crate::chat::llmprovider::AIService::{
     response_stream_from_chunks, retry_error_text, retry_message, AIService, AiServiceError,
@@ -985,7 +987,7 @@ impl ClaudeProvider {
     ) -> Result<Box<dyn RevisableTextStreamLike>, AiServiceError> {
         let mut chunks = Vec::new();
         let mut accumulated_usage = Map::new();
-        let mut pending_bytes = Vec::new();
+        let mut pending_bytes = StreamingLineBuffer::new();
         let mut bytes_stream = response.bytes_stream();
         let mut current_tool_parser: Option<StreamingJsonXmlConverter> = None;
         let mut current_tool_tag_name: Option<String> = None;

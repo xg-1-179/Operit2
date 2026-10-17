@@ -39,7 +39,7 @@ class ThemeGlassSurface extends StatelessWidget {
     final content = material
         ? Material(color: Colors.transparent, child: child)
         : child;
-    if (!transparentSurface) {
+    if (!transparentSurface || MediaQuery.highContrastOf(context)) {
       return _clipIfNeeded(
         DecoratedBox(
           decoration: BoxDecoration(
@@ -57,7 +57,7 @@ class ThemeGlassSurface extends StatelessWidget {
     final decoration = BoxDecoration(
       color: color.withValues(alpha: transparentAlpha ?? style.alpha),
       borderRadius: borderRadius,
-      border: border,
+      border: border ?? Border.all(color: Colors.white.withValues(alpha: 0.16)),
       boxShadow: shadows
           .map(
             (shadow) => BoxShadow(
@@ -69,7 +69,8 @@ class ThemeGlassSurface extends StatelessWidget {
           )
           .toList(growable: false),
     );
-    if (!enableBackdropFilter) {
+    // Repeated cards use translucency; reserve blur for bounded chrome surfaces.
+    if (!enableBackdropFilter || layer == ThemeGlassSurfaceLayer.card) {
       return _clipIfNeeded(
         DecoratedBox(decoration: decoration, child: content),
       );
@@ -112,7 +113,7 @@ _ThemeGlassSurfaceStyle _styleForLayer(ThemeGlassSurfaceLayer layer) {
     ),
     ThemeGlassSurfaceLayer.card => const _ThemeGlassSurfaceStyle(
       blur: 14,
-      alpha: 0.16,
+      alpha: 0.88,
     ),
     ThemeGlassSurfaceLayer.control => const _ThemeGlassSurfaceStyle(
       blur: 10,

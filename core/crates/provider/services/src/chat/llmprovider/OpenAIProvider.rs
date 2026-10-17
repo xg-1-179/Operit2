@@ -12,7 +12,9 @@ use super::OpenAIResponsesProvider::{
     build_responses_web_search_chunks, strip_responses_protocol_markup, OpenAIResponsesPayloadAdapter,
 };
 use super::StructuredToolCallBridge::StructuredToolCallBridge;
-use super::StreamingResponseLines::{decodeStreamingTail, takeNextStreamingLine};
+use super::StreamingResponseLines::{
+    decodeStreamingTail, takeNextStreamingLine, StreamingLineBuffer,
+};
 use super::ThinkingConfiguration::ThinkingConfigurationApplier;
 use crate::chat::llmprovider::AIService::{
     response_stream_from_chunks, retry_error_text, retry_message, AIService, AiServiceError,
@@ -88,7 +90,7 @@ impl Default for OpenAIProviderState {
 
 pub struct StreamingState {
     pub chunks: Vec<String>,
-    pub pending_bytes: Vec<u8>,
+    pub pending_bytes: StreamingLineBuffer,
     pub usage: TokenCounts,
     pub chunkCount: i32,
     pub isInReasoningMode: bool,
@@ -1250,7 +1252,7 @@ impl OpenAIProvider {
     ) -> Result<(), AiServiceError> {
         let mut state = StreamingState {
             chunks: Vec::new(),
-            pending_bytes: Vec::new(),
+            pending_bytes: StreamingLineBuffer::new(),
             usage: TokenCounts {
                 input: 0,
                 cached_input: 0,
