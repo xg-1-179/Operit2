@@ -486,6 +486,7 @@ core_proxy.ToolPkgContainerRuntime _pluginRuntime({
 }) {
   return core_proxy.ToolPkgContainerRuntime(
     themes: [],
+    license: null,
     chatLifecycleHooks: [],
     packageName: packageName,
     displayName: core_proxy.LocalizedText(
