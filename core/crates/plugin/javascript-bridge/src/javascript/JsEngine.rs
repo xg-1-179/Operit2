@@ -1626,7 +1626,7 @@ impl JsEngineState {
                 return Err(JsExecutionError::runtime(error));
             }
             let output = match readNativeExecutionSession(&callId) {
-                Some(output) => output,
+                Some(output) => output?,
                 None => {
                     self.cancelJavaScriptExecution(&callId);
                     return Err(JsExecutionError::runtime(
@@ -1635,7 +1635,11 @@ impl JsEngineState {
                 }
             };
             clearNativeExecutionSession(&callId);
-            output
+            Ok(match output {
+                Value::Null => None,
+                Value::String(text) => Some(text),
+                other => Some(other.to_string()),
+            })
         })();
         clearThreadLocalCallState();
         result
