@@ -2,6 +2,10 @@
 
 把 DeepSeek Harness（Cordis）插件的"时空可组合性"能力带到 Operit2。
 
+这是部分 Cordis 兼容运行时和 ToolPkg 移植工具，不是完整的 DeepSeek Harness
+宿主。Node 测试通过不等于 Android QuickJS 真机兼容通过；安装、工具调用、
+禁用和热重载仍需要在 Android 上验证。
+
 ## 组成
 
 | 文件 | 作用 |
@@ -9,17 +13,20 @@
 | `cordis-core.mjs` | Cordis 兼容内核：Context 服务容器、`inject` 依赖激活、可逆 effect（逆序回卷）、Fiber 状态机、5 种事件分发（emit/parallel/serial/bail/waterfall）、isolate 子上下文 |
 | `dsh-shim.mjs` | 把 dsh 服务映射到 Operit2：`tools`（运行时工具注册）、`fs`、`http`、`config`、`logger`、`storage`；启动时登记 `ToolPkg.onUnload`，卸载时自动 `dispose()` 全部插件树 |
 | `port-dsh-plugin.mjs` | 移植工具：esbuild 打包 dsh 插件 → Node 内捕获工具清单 → 生成 ToolPkg（manifest + main + METADATA/包装器）→ 可选打成 `.toolpkg` |
-| `tests/` | Node 单元测试（11 项，覆盖回卷顺序、依赖激活/停用、级联、隔离、事件模式、工具注册与卸载） |
+| `tests/` | 21 项 Node 测试，覆盖生命周期、依赖激活、隔离、工具注册、ZIP 打包与移植工具集成 |
 
 ## 使用
 
 ```sh
 cd tools/dsh-compat
-npm install esbuild fflate
-node port-dsh-plugin.mjs /path/to/dsh-plugin --out build/my-plugin
+npm ci
+npm test
+node port-dsh-plugin.mjs /path/to/dsh-plugin --out /path/to/empty-output
 ```
 
-把生成的 `build/my-plugin.toolpkg` 导入 Operit2 即可。生成的包会声明
+输出目录必须为空。移植工具会在 Node 中执行插件以捕获工具声明，
+因此只应处理可信来源的插件；捕获过程限时 15 秒。
+生成的 `.toolpkg` 可供导入 Operit2，但 Android 执行结果尚未实机验证。生成的包会声明
 `strict_dependencies: true`，因此依赖的提供者被禁用时，这个插件会被 Operit2 的
 响应式依赖机制自动挂起，提供者恢复后自动重新激活。
 
@@ -38,6 +45,10 @@ node port-dsh-plugin.mjs /path/to/dsh-plugin --out build/my-plugin
 - 依赖 dsh 专有服务 `ctx.llm`、`ctx.sessions`、`ctx.agentLoop`、`ctx.sandbox`、`ctx.approval`、`ctx.mcp`；
 - 使用同步文件系统 API（Operit2 的 Files API 是异步的）；
 - 只提供 UI 美化/视图插件的 dsh 包（Operit2 的 UI 由 Compose DSL 渲染，语义不同）。
+
+完整 Cordis API、配置热更新协调、会话作用域、同名服务替换响应和挂载后
+动态工具发现尚未实现。必需的宿主服务缺少适配时，打包会明确失败，
+而不是输出一个安装后静默失效的包。
 
 ## 与 Operit2 原生插件的关系
 

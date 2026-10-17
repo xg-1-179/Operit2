@@ -68,7 +68,9 @@ class _PhoneLayoutState extends State<PhoneLayout>
   final ValueNotifier<bool> _drawerIsAnimating = ValueNotifier<bool>(false);
   final ValueNotifier<int> _contentActivation = ValueNotifier<int>(0);
   double _currentDrag = 0;
-  double _verticalDrag = 0;
+  double _dragStartProgress = 0;
+  bool _dragging = false;
+  bool _committingDrag = false;
 
   /// Connects the drawer state to its spring animation and motion lifecycle.
   @override
@@ -108,11 +110,14 @@ class _PhoneLayoutState extends State<PhoneLayout>
 
   /// Notifies page owners when a drawer motion starts or finishes.
   void _handleDrawerAnimationStatus(AnimationStatus status) {
-    _drawerIsAnimating.value = _drawerProgressController.isAnimating;
+    _drawerIsAnimating.value =
+        _dragging || _drawerProgressController.isAnimating;
   }
 
   /// Retargets the drawer spring from its current position and velocity.
-  void _animateDrawerProgress() {
+  void _animateDrawerProgress({double? releaseVelocity}) {
+    if (_committingDrag) return;
+    _dragging = false;
     final target = widget.drawerOpenState.value ? 1.0 : 0.0;
     final dampingRatio = widget.drawerOpenState.value
         ? _lowBouncyDampingRatio
@@ -125,7 +130,7 @@ class _PhoneLayoutState extends State<PhoneLayout>
       ),
       _drawerProgressController.value,
       target,
-      _drawerProgressController.velocity,
+      releaseVelocity ?? _drawerProgressController.velocity,
     );
     _drawerProgressController.animateWith(simulation);
   }
@@ -145,31 +150,56 @@ class _PhoneLayoutState extends State<PhoneLayout>
   /// Resets accumulated movement for a new drawer gesture.
   void _handleHorizontalDragStart(DragStartDetails details) {
     _currentDrag = 0;
-    _verticalDrag = 0;
+    _dragStartProgress = _drawerProgressController.value.clamp(0.0, 1.0);
+    _dragging = true;
+    _drawerProgressController.stop();
+    _drawerIsAnimating.value = true;
   }
 
-  /// Opens or closes the drawer after a deliberate horizontal gesture.
+  /// Tracks the accepted gesture directly instead of starting a spring mid-drag.
   void _handleHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!_dragging || widget.drawerWidth <= 0) return;
     _currentDrag += details.primaryDelta ?? 0;
-    _verticalDrag += details.delta.dy;
-    if (!widget.drawerOpenState.value &&
-        _currentDrag > _dragThreshold &&
-        _currentDrag.abs() > _verticalDrag.abs()) {
-      _currentDrag = 0;
-      _verticalDrag = 0;
-      widget.onOpenDrawer();
-    }
-    if (widget.drawerOpenState.value && _currentDrag < -_dragThreshold) {
-      _currentDrag = 0;
-      _verticalDrag = 0;
-      widget.onCloseDrawer();
-    }
+    _drawerProgressController.value =
+        (_dragStartProgress + _currentDrag / widget.drawerWidth)
+            .clamp(0.0, 1.0);
   }
 
-  /// Clears gesture movement after the pointer is released.
+  /// Preserves release velocity and the existing deliberate-swipe threshold.
   void _handleHorizontalDragEnd(DragEndDetails details) {
+    if (!_dragging) return;
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldOpen = velocity.abs() >= 500
+        ? velocity > 0
+        : _currentDrag.abs() > _dragThreshold
+        ? _currentDrag > 0
+        : _drawerProgressController.value >= 0.5;
+    _dragging = false;
+    _committingDrag = true;
+    try {
+      if (shouldOpen != widget.drawerOpenState.value) {
+        if (shouldOpen) {
+          widget.onOpenDrawer();
+        } else {
+          widget.onCloseDrawer();
+        }
+      }
+    } finally {
+      _committingDrag = false;
+    }
+    // A callback need not change the notifier, so always settle explicitly.
+    _animateDrawerProgress(
+      releaseVelocity: widget.drawerWidth > 0
+          ? velocity / widget.drawerWidth
+          : 0,
+    );
     _currentDrag = 0;
-    _verticalDrag = 0;
+  }
+
+  void _handleHorizontalDragCancel() {
+    if (!_dragging) return;
+    _currentDrag = 0;
+    _animateDrawerProgress(releaseVelocity: 0);
   }
 
   /// Builds retained content layers and animates their drawer presentation.
@@ -226,10 +256,7 @@ class _PhoneLayoutState extends State<PhoneLayout>
                 ..onStart = _handleHorizontalDragStart
                 ..onUpdate = _handleHorizontalDragUpdate
                 ..onEnd = _handleHorizontalDragEnd
-                ..onCancel = () {
-                  _currentDrag = 0;
-                  _verticalDrag = 0;
-                };
+                ..onCancel = _handleHorizontalDragCancel;
             }),
       },
       child: AnimatedBuilder(

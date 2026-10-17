@@ -15,6 +15,78 @@ import 'package:operit2/ui/theme/OperitTheme.dart';
 void main() {
   for (final enableNavigationAnimation in <bool>[true, false]) {
     testWidgets(
+      'drawer follows pointer before release and reverses continuously (effects: $enableNavigationAnimation)',
+      (tester) async {
+        final drawerOpen = ValueNotifier<bool>(false);
+        addTearDown(drawerOpen.dispose);
+        await _pumpSwipeTestLayout(
+          tester,
+          drawerOpen: drawerOpen,
+          enableNavigationAnimation: enableNavigationAnimation,
+          content: const ColoredBox(
+            key: ValueKey('dragContent'),
+            color: Colors.white,
+          ),
+        );
+        double contentX() => tester.getTopLeft(
+          find.byKey(const ValueKey('dragContent')),
+        ).dx;
+        final gesture = await tester.startGesture(const Offset(20, 400));
+        await gesture.moveBy(const Offset(24, 0));
+        await tester.pump();
+        await gesture.moveBy(const Offset(90, 0));
+        await tester.pump();
+        final moved = contentX();
+        expect(moved, greaterThan(40));
+        expect(drawerOpen.value, isFalse);
+        // Holding a finger still must not let an autonomous spring run ahead.
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(contentX(), closeTo(moved, 0.01));
+        await gesture.moveBy(const Offset(-30, 0),
+          timeStamp: const Duration(milliseconds: 200));
+        await tester.pump();
+        expect(contentX(), lessThan(moved));
+        await tester.pump(const Duration(milliseconds: 200));
+        await gesture.moveBy(Offset.zero,
+          timeStamp: const Duration(milliseconds: 500));
+        await gesture.up(timeStamp: const Duration(milliseconds: 516));
+        expect(drawerOpen.value, isTrue);
+        await tester.pumpAndSettle();
+        expect(tester.binding.hasScheduledFrame, isFalse);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+    testWidgets(
+      'cancelled drawer drag returns to committed state (effects: $enableNavigationAnimation)',
+      (tester) async {
+        final drawerOpen = ValueNotifier<bool>(false);
+        addTearDown(drawerOpen.dispose);
+        await _pumpSwipeTestLayout(
+          tester,
+          drawerOpen: drawerOpen,
+          enableNavigationAnimation: enableNavigationAnimation,
+          content: const ColoredBox(
+            key: ValueKey('cancelContent'),
+            color: Colors.white,
+          ),
+        );
+        final gesture = await tester.startGesture(const Offset(20, 400));
+        await gesture.moveBy(const Offset(24, 0));
+        await gesture.moveBy(const Offset(90, 0));
+        await tester.pump();
+        await gesture.cancel();
+        await tester.pumpAndSettle();
+        expect(drawerOpen.value, isFalse);
+        expect(tester.getTopLeft(
+          find.byKey(const ValueKey('cancelContent')),
+        ).dx, closeTo(0, 0.01));
+        expect(tester.binding.hasScheduledFrame, isFalse);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+    testWidgets(
       'input cursor drag does not open drawer (effects: $enableNavigationAnimation)',
       (tester) async {
         final controller = TextEditingController(

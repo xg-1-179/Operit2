@@ -83,6 +83,7 @@ void main() {
       }
     }
     await tester.pumpWidget(scene(text: source));
+    var sawPartialReveal = false;
     for (var tick = 0; tick < 50; tick++) {
       await tester.pump(const Duration(milliseconds: 16));
       final spans = tester.widgetList<Text>(find.byType(Text))
@@ -90,6 +91,18 @@ void main() {
           .whereType<TextSpan>();
       expect(spans, isNotEmpty);
       for (final span in spans) {
+        void inspectOpacity(InlineSpan node) {
+          if (node is! TextSpan) return;
+          final alpha = node.style?.color?.a;
+          if (node.text?.isNotEmpty == true &&
+              alpha != null && alpha > 0 && alpha < 1) {
+            sawPartialReveal = true;
+          }
+          for (final child in node.children ?? const <InlineSpan>[]) {
+            inspectOpacity(child);
+          }
+        }
+        inspectOpacity(span);
         for (final leaf in leaves(span)) {
           for (final cluster in clusters) {
             for (final rune in cluster.runes) {
@@ -102,6 +115,7 @@ void main() {
         }
       }
     }
+    expect(sawPartialReveal, isTrue, reason: 'Exercise animated, not just completed, text');
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

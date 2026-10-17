@@ -177,3 +177,26 @@ and plugin workload in both runs. No APK was built in this step.
   and includes the popup, Markdown and navigation regression suites.
 - These are source/test infrastructure changes, not a newly delivered APK or
   measured Android frame-rate improvement. Device validation remains required.
+
+## Continuous drawer gestures and composer press feedback
+
+- Cloud run 39020037873 passed UI analysis, all 14 glass/popup interaction
+  tests, app analysis, application rendering regressions and 26 Node tests.
+  This validates the previous commit, not the new gestures described below.
+- Drawer drag now sets progress directly from the accepted horizontal gesture.
+  A stationary finger no longer starts an autonomous spring; direction reversals
+  remain continuous. On release, the spring preserves normalized velocity and
+  the existing deliberate-swipe threshold. Cancellation restores committed state.
+  Synchronous notifier callbacks cannot start a duplicate release spring.
+- Model selector, composer icons and send/stop controls retain their content
+  and layout while scaling to 0.94 on press, then easing back to 1.0. Multi-touch,
+  pointer cancellation, disabled controls and reduced motion are covered.
+- Added drawer-follow/hold/reverse/cancel tests for both navigation-effect
+  settings and composer press/release/multi-touch/disposal regressions. Both
+  performance and APK workflows now include these test suites. Local Node
+  regressions remain 26/26 passed; new Flutter checks require cloud execution.
+- Existing 3D drawer motion, blur, refraction, custom icon assets, plugin actions
+  and accessibility settings remain enabled. This is not a complete app-wide UI
+  redesign, measured device FPS improvement or full DeepSeek Harness host.
+- Android installation/call/unload of converted plugins remains unverified.
+  Existing desktop APK build 20 does not contain this follow-up.

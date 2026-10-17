@@ -8,6 +8,54 @@ Duration _composerMotion(BuildContext context, int milliseconds) =>
     ? Duration.zero
     : Duration(milliseconds: milliseconds);
 
+/// Keeps control layout and content stable while the compositor animates touch.
+class _ComposerPressFeedback extends StatefulWidget {
+  const _ComposerPressFeedback({required this.enabled, required this.child});
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_ComposerPressFeedback> createState() => _ComposerPressFeedbackState();
+}
+
+class _ComposerPressFeedbackState extends State<_ComposerPressFeedback> {
+  final Set<int> _pointers = <int>{};
+
+  void _press(PointerDownEvent event) {
+    if (!mounted || !widget.enabled) return;
+    final wasPressed = _pointers.isNotEmpty;
+    _pointers.add(event.pointer);
+    if (!wasPressed) setState(() {});
+  }
+
+  void _release(PointerEvent event) {
+    if (!mounted) return;
+    if (_pointers.remove(event.pointer) && _pointers.isEmpty) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _ComposerPressFeedback oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled) _pointers.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pressed = widget.enabled && _pointers.isNotEmpty;
+    return Listener(
+      onPointerDown: _press,
+      onPointerUp: _release,
+      onPointerCancel: _release,
+      child: AnimatedScale(
+        scale: pressed ? 0.94 : 1,
+        duration: _composerMotion(context, pressed ? 110 : 180),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class ThemeComposerHorizontalVisibility extends StatelessWidget {
   const ThemeComposerHorizontalVisibility({
     super.key,
@@ -341,31 +389,34 @@ class ThemeComposerModelSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     const radius = BorderRadius.all(Radius.circular(12));
-    return Material(
-      color: expanded
-          ? scheme.onSurface.withValues(alpha: 0.08)
-          : Colors.transparent,
-      borderRadius: radius,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
+    return _ComposerPressFeedback(
+      enabled: onTap != null,
+      child: Material(
+        color: expanded
+            ? scheme.onSurface.withValues(alpha: 0.08)
+            : Colors.transparent,
         borderRadius: radius,
-        splashFactory: NoSplash.splashFactory,
-        overlayColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.pressed)) {
-            return scheme.onSurface.withValues(alpha: 0.12);
-          }
-          if (states.contains(WidgetState.hovered) ||
-              states.contains(WidgetState.focused)) {
-            return scheme.onSurface.withValues(alpha: 0.08);
-          }
-          return Colors.transparent;
-        }),
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 220),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: identity,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: radius,
+          splashFactory: NoSplash.splashFactory,
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return scheme.onSurface.withValues(alpha: 0.12);
+            }
+            if (states.contains(WidgetState.hovered) ||
+                states.contains(WidgetState.focused)) {
+              return scheme.onSurface.withValues(alpha: 0.08);
+            }
+            return Colors.transparent;
+          }),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: identity,
+            ),
           ),
         ),
       ),
@@ -525,24 +576,27 @@ class ThemeComposerIconTarget extends StatelessWidget {
         : targetSize;
     return Tooltip(
       message: tooltip,
-      child: InkResponse(
-        onTap: onTap,
-        radius: effectiveTargetSize / 2,
-        child: SizedBox(
-          width: effectiveTargetSize,
-          height: effectiveTargetSize,
-          child: Center(
-            child: hasImage
-                ? SizedBox(
-                    width: visualSize,
-                    height: visualSize,
-                    child: ResolvedThemeImage(
-                      resolver: ThemeAssetScope.of(context),
-                      reference: imageAsset!,
-                      fit: BoxFit.contain,
-                    ),
-                  )
-                : Icon(icon, size: size, color: color),
+      child: _ComposerPressFeedback(
+        enabled: onTap != null,
+        child: InkResponse(
+          onTap: onTap,
+          radius: effectiveTargetSize / 2,
+          child: SizedBox(
+            width: effectiveTargetSize,
+            height: effectiveTargetSize,
+            child: Center(
+              child: hasImage
+                  ? SizedBox(
+                      width: visualSize,
+                      height: visualSize,
+                      child: ResolvedThemeImage(
+                        resolver: ThemeAssetScope.of(context),
+                        reference: imageAsset!,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Icon(icon, size: size, color: color),
+            ),
           ),
         ),
       ),
@@ -658,6 +712,12 @@ class ThemeComposerActionButton extends StatelessWidget {
         ],
       ),
     );
-    return tooltip.isEmpty ? button : Tooltip(message: tooltip, child: button);
+    final feedback = _ComposerPressFeedback(
+      enabled: onPressed != null,
+      child: button,
+    );
+    return tooltip.isEmpty
+        ? feedback
+        : Tooltip(message: tooltip, child: feedback);
   }
 }
