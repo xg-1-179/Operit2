@@ -1,6 +1,7 @@
 // ignore_for_file: file_names
 
 import 'package:flutter/material.dart';
+import 'package:operit_ui/operit_ui.dart';
 
 import 'package:operit2/ui/main/navigation/AppNavigationModels.dart';
 import 'package:operit2/ui/main/screens/OperitScreens.dart';
@@ -161,11 +162,7 @@ class _AgentModelSelectorPopupState extends State<AgentModelSelectorPopup> {
     final popupContainerColor = colorScheme.surfaceContainer;
     return Material(
       color: Colors.transparent,
-      child: Card(
-        margin: EdgeInsets.zero,
-        color: popupContainerColor,
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ComposerPopupSurface(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 300, maxHeight: 420),
           child: FutureBuilder<_AgentModelSelectorData>(

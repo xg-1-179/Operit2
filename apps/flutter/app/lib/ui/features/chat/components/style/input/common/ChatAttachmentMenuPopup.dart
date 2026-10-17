@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:operit_ui/operit_ui.dart';
 
 import '../../../../../../../core/application/PluginHotReload.dart';
 import '../../../../../../../core/proxy/generated/CoreProxyClients.g.dart';
@@ -216,11 +217,7 @@ class _ChatAttachmentMenuPopupState extends State<ChatAttachmentMenuPopup> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainer,
-      elevation: 4,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
+    return ComposerPopupSurface(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Column(

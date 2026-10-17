@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:operit_ui/operit_ui.dart';
 
 import '../../../../../../../core/proxy/generated/CoreProxyModels.g.dart'
     as core_proxy;
@@ -192,14 +193,9 @@ class _AgentInputMenuPopupState extends State<AgentInputMenuPopup> {
   /// Builds the input menu popup with optional leading entries.
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
-      child: Card(
-        margin: EdgeInsets.zero,
-        color: colorScheme.surfaceContainer,
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ComposerPopupSurface(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 300, maxHeight: 420),
           child: FutureBuilder<_AgentInputMenuData>(

@@ -98,6 +98,7 @@ class _MarkdownTextState extends State<_MarkdownText>
   late Animation<double> _revealAnimation;
   double _revealValue = 0;
   int _targetLength = 0;
+  late List<String> _sourceLines;
 
   bool get _enableTypewriter =>
       widget.isStreaming &&
@@ -109,6 +110,7 @@ class _MarkdownTextState extends State<_MarkdownText>
   @override
   void initState() {
     super.initState();
+    _sourceLines = widget.text.split('\n');
     _controller =
         AnimationController(vsync: this, duration: _streamRenderInterval)
           ..addListener(() {
@@ -129,6 +131,9 @@ class _MarkdownTextState extends State<_MarkdownText>
   @override
   void didUpdateWidget(covariant _MarkdownText oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.text != oldWidget.text) {
+      _sourceLines = widget.text.split('\n');
+    }
     final targetLength = _typewriterTextLength(widget.text);
     if (!_enableTypewriter) {
       _controller.stop();
@@ -173,7 +178,7 @@ class _MarkdownTextState extends State<_MarkdownText>
     final paragraphLines = <String>[];
     var inCode = false;
     var codeLanguage = '';
-    final lines = widget.text.split('\n');
+    final lines = _sourceLines;
     var index = 0;
     var textBlockIndex = 0;
     var paragraphBreakIndex = 0;
@@ -803,6 +808,26 @@ class _TypewriterMarkdownRichText extends StatefulWidget {
 class _TypewriterMarkdownRichTextState
     extends State<_TypewriterMarkdownRichText> {
   final MarkdownLinkGestureOwner _gestures = MarkdownLinkGestureOwner();
+  InlineSpan? _cachedRichSpan;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _cachedRichSpan = null;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TypewriterMarkdownRichText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reveal progress changes every frame; only source/style changes reparse.
+    if (oldWidget.text != widget.text ||
+        oldWidget.color != widget.color ||
+        oldWidget.style != widget.style ||
+        oldWidget.onLinkClick != widget.onLinkClick ||
+        !identical(oldWidget.children, widget.children)) {
+      _cachedRichSpan = null;
+    }
+  }
 
   @override
   void dispose() {
@@ -812,29 +837,7 @@ class _TypewriterMarkdownRichTextState
 
   @override
   Widget build(BuildContext context) {
-    _gestures.beginFrame();
-    late final InlineSpan richSpan;
-    try {
-      richSpan = widget.children.isNotEmpty
-          ? buildMarkdownInlineSpannableFromMarkdownNodes(
-              context: context,
-              children: widget.children,
-              textColor: widget.color,
-              baseStyle: widget.style,
-              onLinkClick: widget.onLinkClick,
-              gestures: _gestures,
-            )
-          : buildMarkdownInlineSpannableFromText(
-              context: context,
-              text: widget.text,
-              textColor: widget.color,
-              baseStyle: widget.style,
-              onLinkClick: widget.onLinkClick,
-              gestures: _gestures,
-            );
-    } finally {
-      _gestures.endFrame();
-    }
+    final richSpan = _cachedRichSpan ??= _buildRichSpan(context);
     final revealSpan = _revealedTypewriterSpan(
       source: richSpan,
       revealLength: widget.revealLength,
@@ -880,6 +883,33 @@ class _TypewriterMarkdownRichTextState
         constraints.maxWidth,
       ),
     );
+  }
+
+  InlineSpan _buildRichSpan(BuildContext context) {
+    _gestures.beginFrame();
+    late final InlineSpan richSpan;
+    try {
+      richSpan = widget.children.isNotEmpty
+          ? buildMarkdownInlineSpannableFromMarkdownNodes(
+              context: context,
+              children: widget.children,
+              textColor: widget.color,
+              baseStyle: widget.style,
+              onLinkClick: widget.onLinkClick,
+              gestures: _gestures,
+            )
+          : buildMarkdownInlineSpannableFromText(
+              context: context,
+              text: widget.text,
+              textColor: widget.color,
+              baseStyle: widget.style,
+              onLinkClick: widget.onLinkClick,
+              gestures: _gestures,
+            );
+    } finally {
+      _gestures.endFrame();
+    }
+    return richSpan;
   }
 }
 

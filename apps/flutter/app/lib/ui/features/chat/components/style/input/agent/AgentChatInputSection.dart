@@ -230,9 +230,11 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {},
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: placement.maxHeight),
-                  child: widget.mentionSuggestionPanel!,
+                child: ComposerPopupTransition(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: placement.maxHeight),
+                    child: widget.mentionSuggestionPanel!,
+                  ),
                 ),
               ),
             ),
@@ -310,13 +312,15 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {},
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: placement.maxHeight),
-                  child: AgentModelSelectorPopup(
+                child: ComposerPopupTransition(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: placement.maxHeight),
+                    child: AgentModelSelectorPopup(
                     key: _modelPopupWidgetKey,
                     viewModel: widget.viewModel,
                     onDismiss: _dismissModelSettingsPopup,
                     onModelChanged: _handleModelChanged,
+                    ),
                   ),
                 ),
               ),
@@ -365,13 +369,16 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {},
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: placement.maxHeight),
-                  child: AgentInputMenuPopup(
+                child: ComposerPopupTransition(
+                  alignEnd: true,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: placement.maxHeight),
+                    child: AgentInputMenuPopup(
                     viewModel: viewModel,
                     currentChatId: chatId,
                     onDismiss: _dismissInputMenuPopup,
                     isChatContextCurrent: isChatContextCurrent,
+                    ),
                   ),
                 ),
               ),
@@ -409,9 +416,11 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {},
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: placement.maxHeight),
-                  child: ChatAttachmentMenuPopup(
+                child: ComposerPopupTransition(
+                  alignEnd: true,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: placement.maxHeight),
+                    child: ChatAttachmentMenuPopup(
                     clients: widget.viewModel.clients,
                     chatId: widget.currentChatId,
                     onDismiss: _dismissAttachmentPopup,
@@ -429,6 +438,7 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
                       widget.onAttachLocation,
                     ),
                     onAttachPackage: _showAttachmentPackageSelector,
+                    ),
                   ),
                 ),
               ),
