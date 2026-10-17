@@ -70,4 +70,40 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('reveal never slices emoji or combining grapheme clusters', (tester) async {
+    const clusters = <String>['\u{1f469}\u200d\u{1f4bb}', 'e\u0301', '\u{1f1e8}\u{1f1f3}'];
+    final source = 'Hello ${clusters.join(' ')} world';
+    Iterable<String> leaves(InlineSpan span) sync* {
+      if (span is TextSpan) {
+        if (span.text != null) yield span.text!;
+        for (final child in span.children ?? const <InlineSpan>[]) {
+          yield* leaves(child);
+        }
+      }
+    }
+    await tester.pumpWidget(scene(text: source));
+    for (var tick = 0; tick < 50; tick++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final spans = tester.widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.textSpan)
+          .whereType<TextSpan>();
+      expect(spans, isNotEmpty);
+      for (final span in spans) {
+        for (final leaf in leaves(span)) {
+          for (final cluster in clusters) {
+            for (final rune in cluster.runes) {
+              if (leaf.runes.contains(rune)) {
+                // Ignore the ASCII e shared by the surrounding words.
+                if (rune != 0x65) expect(leaf, contains(cluster));
+              }
+            }
+          }
+        }
+      }
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

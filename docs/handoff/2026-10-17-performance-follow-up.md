@@ -133,3 +133,30 @@ and plugin workload in both runs. No APK was built in this step.
   that failure is not a successful rendering or application validation.
 - Local Android/DSH Node regressions: 25 passed. Flutter compilation, animation
   regressions, device profiling and a new APK remain pending for this change.
+
+## Composer notification and grapheme follow-up
+
+- Cloud run 39017474455: focused UI analyzer passed; 11 interaction tests
+  passed, one disposal regression failed. A late pointer cancellation invoked
+  animateTo after AnimationController.dispose. Pointer callbacks now reject
+  unmounted state; the regression remains enabled. Interrupted gestures are
+  additionally covered. The run was cancelled to retrieve diagnostics.
+- Generated app proxy contracts successfully. Full app analysis reported 95
+  warnings/informational lints, no compiler errors. CI continues to fail on
+  analyzer errors, reports existing warnings without blocking rendering tests,
+  and runs rendering regressions separately so diagnostics cannot hide tests.
+- Composer controller notifications ignore selection/composing-only updates.
+  Parent chrome rebuilds only when trimmed draft presence changes; the editor
+  still receives every text change. Controller replacement resets both caches.
+  A Node source-contract test guards this wiring, not actual widget behavior.
+- Streaming reveal caches UTF-16 grapheme boundaries per source span instead
+  of repeatedly scanning text on every reveal frame. Source/style/dependency
+  changes invalidate this cache together with the inline span. Emoji and
+  combining-character regressions cover whole-cluster rendering.
+- Restored card backdrop blur (sigma 14) and original 0.16 transparency, which
+  commit 1c8ef58 had replaced with unblurred alpha 0.88. This honors the user's
+  explicit requirement not to remove visual effects; high contrast and explicit
+  opt-out remain supported. Blur restoration may increase raster work and must
+  be profiled rather than claimed as a performance improvement.
+- No new APK, connected-device frame profiling or full-app UI redesign has
+  been completed. DSH support remains partial as documented above.

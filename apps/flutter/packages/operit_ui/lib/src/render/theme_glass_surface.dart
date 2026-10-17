@@ -69,8 +69,7 @@ class ThemeGlassSurface extends StatelessWidget {
           )
           .toList(growable: false),
     );
-    // Repeated cards use translucency; reserve blur for bounded chrome surfaces.
-    if (!enableBackdropFilter || layer == ThemeGlassSurfaceLayer.card) {
+    if (!enableBackdropFilter) {
       return _clipIfNeeded(
         DecoratedBox(decoration: decoration, child: content),
       );
@@ -113,7 +112,7 @@ _ThemeGlassSurfaceStyle _styleForLayer(ThemeGlassSurfaceLayer layer) {
     ),
     ThemeGlassSurfaceLayer.card => const _ThemeGlassSurfaceStyle(
       blur: 14,
-      alpha: 0.88,
+      alpha: 0.16,
     ),
     ThemeGlassSurfaceLayer.control => const _ThemeGlassSurfaceStyle(
       blur: 10,

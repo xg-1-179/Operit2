@@ -290,6 +290,7 @@ class _InteractiveInputGlassState extends State<_InteractiveInputGlass>
   }
 
   void _press(int pointer) {
+    if (!mounted) return;
     final wasPressed = _pointers.isNotEmpty;
     _pointers.add(pointer);
     if (!wasPressed) {
@@ -299,6 +300,7 @@ class _InteractiveInputGlassState extends State<_InteractiveInputGlass>
   }
 
   void _release(int pointer) {
+    if (!mounted) return;
     if (_pointers.remove(pointer) && _pointers.isEmpty) {
       _animateInteraction();
       setState(() {});

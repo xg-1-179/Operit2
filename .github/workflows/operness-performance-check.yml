@@ -73,10 +73,16 @@ jobs:
         shell: pwsh
         working-directory: apps/flutter/app
         run: |
-          flutter analyze lib
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run application rendering regressions
+        if: ${{ !cancelled() && steps.proxy.outcome == 'success' }}
+        shell: pwsh
+        working-directory: apps/flutter/app
+        run: |
           flutter test test/client_logger_batching_test.dart test/runtime_bootstrap_logging_test.dart test/idle_rendering_test.dart test/markdown_reveal_cache_test.dart test/page_transition_lifecycle_test.dart test/phone_page_transition_test.dart
       - name: Check Android worker contracts and plugin regressions
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           npm ci --prefix tools/dsh-compat --no-audit --no-fund

@@ -4,6 +4,23 @@ import 'package:liquid_glass_widgets/widgets/shared/glass_effect.dart';
 import 'package:operit_ui/operit_ui.dart';
 
 void main() {
+  testWidgets('transparent cards retain blur and the original translucency', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: ThemeGlassSurface(
+        color: Colors.white,
+        transparentSurface: true,
+        child: SizedBox(width: 200, height: 80),
+      ),
+    ));
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    final decoration = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere((decoration) => decoration.color != null);
+    expect(decoration.color!.a, closeTo(0.16, 0.005));
+    expect(tester.takeException(), isNull);
+  });
+
   Widget scene({bool reduceMotion = false, bool highContrast = false}) =>
       MaterialApp(
         home: MediaQuery(
@@ -129,6 +146,33 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await gesture.cancel();
     await tester.pumpAndSettle();
+    expect(tester.binding.transientCallbackCount, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('interrupted press and release continue from the current refraction', (tester) async {
+    await tester.pumpWidget(scene());
+    await tester.pumpAndSettle();
+    final center = tester.getCenter(find.byType(AgentInputSurface));
+    final first = await tester.startGesture(center);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    final animation = tester.widget<GlassEffect>(find.byType(GlassEffect)).interactionAnimation!;
+    final pressedValue = animation.value;
+    await first.up();
+    await tester.pump();
+    expect(animation.value, closeTo(pressedValue, 0.0001));
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(animation.value, lessThan(pressedValue));
+    final releasedValue = animation.value;
+    final second = await tester.startGesture(center);
+    await tester.pump();
+    expect(animation.value, closeTo(releasedValue, 0.0001));
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(animation.value, greaterThan(releasedValue));
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(animation.value, 0);
     expect(tester.binding.transientCallbackCount, 0);
     expect(tester.takeException(), isNull);
   });

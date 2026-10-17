@@ -131,6 +131,8 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
   List<core_proxy.ProviderProfile> _modelProfiles = const [];
   bool _draggingFiles = false;
   bool _inputExpanded = false;
+  late bool _hasDraftText;
+  late String _lastInputText;
   String _modelLabel = '';
   String _modelProviderTypeId = '';
   String _modelProviderName = '';
@@ -140,6 +142,8 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _lastInputText = widget.controller.text;
+    _hasDraftText = _lastInputText.trim().isNotEmpty;
     widget.controller.addListener(_handleInputChanged);
     _watchCurrentModelLabel();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -158,6 +162,8 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_handleInputChanged);
+      _lastInputText = widget.controller.text;
+      _hasDraftText = _lastInputText.trim().isNotEmpty;
       widget.controller.addListener(_handleInputChanged);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -166,9 +172,14 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
   }
 
   void _handleInputChanged() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (!mounted) return;
+    final text = widget.controller.text;
+    if (text == _lastInputText) return;
+    _lastInputText = text;
+    final hasDraftText = text.trim().isNotEmpty;
+    if (hasDraftText == _hasDraftText) return;
+    // EditableText owns text/selection updates; chrome only needs draft presence.
+    setState(() => _hasDraftText = hasDraftText);
   }
 
   /// Rebuilds open popups after the viewport finishes relayout.
@@ -645,7 +656,7 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
       context,
     ).themePreferenceSnapshot;
     final processing = widget.isLoading || widget.inputState.isProcessing;
-    final hasDraftText = widget.controller.text.trim().isNotEmpty;
+    final hasDraftText = _hasDraftText;
     final canSendMessage = hasDraftText || widget.attachments.isNotEmpty;
     final showCancelAction = processing && !hasDraftText;
     final showQueueAction = processing && hasDraftText;

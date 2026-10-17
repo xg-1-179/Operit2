@@ -809,11 +809,13 @@ class _TypewriterMarkdownRichTextState
     extends State<_TypewriterMarkdownRichText> {
   final MarkdownLinkGestureOwner _gestures = MarkdownLinkGestureOwner();
   InlineSpan? _cachedRichSpan;
+  _RevealTextIndex? _cachedRevealIndex;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cachedRichSpan = null;
+    _cachedRevealIndex = null;
   }
 
   @override
@@ -826,6 +828,7 @@ class _TypewriterMarkdownRichTextState
         oldWidget.onLinkClick != widget.onLinkClick ||
         !identical(oldWidget.children, widget.children)) {
       _cachedRichSpan = null;
+      _cachedRevealIndex = null;
     }
   }
 
@@ -838,8 +841,10 @@ class _TypewriterMarkdownRichTextState
   @override
   Widget build(BuildContext context) {
     final richSpan = _cachedRichSpan ??= _buildRichSpan(context);
+    final revealIndex = _cachedRevealIndex ??= _RevealTextIndex(richSpan);
     final revealSpan = _revealedTypewriterSpan(
       source: richSpan,
+      index: revealIndex,
       revealLength: widget.revealLength,
       showCursor: widget.showCursor,
       baseStyle: widget.style,
@@ -913,6 +918,25 @@ class _TypewriterMarkdownRichTextState
   }
 }
 
+/// Source-owned UTF-16 boundaries keep reveal ticks from rescanning graphemes.
+class _RevealTextIndex {
+  _RevealTextIndex(InlineSpan source)
+    : length = source.toPlainText().characters.length;
+
+  final int length;
+  final Map<String, List<int>> _offsets = <String, List<int>>{};
+
+  List<int> offsetsFor(String text) => _offsets.putIfAbsent(text, () {
+    final offsets = <int>[0];
+    var offset = 0;
+    for (final character in text.characters) {
+      offset += character.length;
+      offsets.add(offset);
+    }
+    return offsets;
+  });
+}
+
 class _RevealSegment {
   const _RevealSegment({required this.revealLength, required this.showCursor});
 
@@ -922,10 +946,15 @@ class _RevealSegment {
 
 /// Tracks reveal progress while reconstructing one RichText span tree.
 class _InlineRevealState {
-  _InlineRevealState({required this.revealLength, required this.showCursor});
+  _InlineRevealState({
+    required this.revealLength,
+    required this.showCursor,
+    required this.index,
+  });
 
   final double revealLength;
   final bool showCursor;
+  final _RevealTextIndex index;
   var consumedLength = 0;
   var cursorInserted = false;
 }
@@ -933,14 +962,15 @@ class _InlineRevealState {
 /// Builds a RichText span tree that preserves layout while revealing content.
 TextSpan _revealedTypewriterSpan({
   required InlineSpan source,
+  required _RevealTextIndex index,
   required double revealLength,
   required bool showCursor,
   required TextStyle? baseStyle,
 }) {
-  final plainTextLength = source.toPlainText().characters.length;
   final state = _InlineRevealState(
-    revealLength: revealLength.clamp(0, plainTextLength).toDouble(),
+    revealLength: revealLength.clamp(0, index.length).toDouble(),
     showCursor: showCursor,
+    index: index,
   );
   final spans = <InlineSpan>[];
   _appendRevealedInlineSpan(
@@ -1004,8 +1034,8 @@ void _appendRevealedText({
   required _InlineRevealState state,
 }) {
   final segmentStart = state.consumedLength;
-  final textCharacters = text.characters;
-  final textLength = textCharacters.length;
+  final offsets = state.index.offsetsFor(text);
+  final textLength = offsets.length - 1;
   final segmentEnd = segmentStart + textLength;
   final revealLength = state.revealLength;
   if (revealLength >= segmentEnd) {
@@ -1030,7 +1060,7 @@ void _appendRevealedText({
   if (visibleLength > 0) {
     spans.add(
       TextSpan(
-        text: textCharacters.take(visibleLength).toString(),
+        text: text.substring(0, offsets[visibleLength]),
         style: style,
         recognizer: recognizer,
       ),
@@ -1040,7 +1070,7 @@ void _appendRevealedText({
   if (partialAmount > 0 && visibleLength < textLength) {
     spans.add(
       TextSpan(
-        text: textCharacters.skip(visibleLength).take(1).toString(),
+        text: text.substring(offsets[visibleLength], offsets[visibleLength + 1]),
         style: _partialTextStyle(style, partialAmount),
       ),
     );
@@ -1051,7 +1081,7 @@ void _appendRevealedText({
   if (hiddenStart < textLength) {
     spans.add(
       TextSpan(
-        text: textCharacters.skip(hiddenStart).toString(),
+        text: text.substring(offsets[hiddenStart]),
         style: _hiddenTextStyle(style),
       ),
     );

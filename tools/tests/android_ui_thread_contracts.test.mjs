@@ -4,8 +4,26 @@ import test from 'node:test';
 
 const base = new URL('../../apps/flutter/app/android/app/src/main/kotlin/app/operit/', import.meta.url);
 const source = name => readFileSync(new URL(name, base), 'utf8');
+const composerSource = () => readFileSync(new URL(
+  '../../apps/flutter/app/lib/ui/features/chat/components/style/input/agent/AgentChatInputSection.dart',
+  import.meta.url), 'utf8');
 
 // These guard thread placement, not Android runtime behavior or frame times.
+test('composer ignores cursor/composing notifications and unchanged draft presence', () => {
+  const text = composerSource();
+  const listener = section(text, 'void _handleInputChanged()', 'void didChangeMetrics()');
+  const unchangedText = listener.indexOf('if (text == _lastInputText) return;');
+  const unchangedPresence = listener.indexOf('if (hasDraftText == _hasDraftText) return;');
+  const rebuild = listener.indexOf('setState(');
+  assert.ok(unchangedText >= 0 && unchangedText < unchangedPresence);
+  assert.ok(unchangedPresence < rebuild);
+  const replacement = section(text, 'void didUpdateWidget(', 'void _handleInputChanged()');
+  assert.match(replacement, /oldWidget.controller.removeListener/);
+  assert.match(replacement, /_lastInputText = widget.controller.text/);
+  assert.match(replacement, /_hasDraftText = _lastInputText.trim\(\).isNotEmpty/);
+  assert.match(replacement, /widget.controller.addListener/);
+});
+
 function section(text, start, end) {
   const first = text.indexOf(start);
   assert.notEqual(first, -1, `Missing ${start}`);
