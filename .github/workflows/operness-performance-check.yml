@@ -29,7 +29,9 @@ jobs:
         working-directory: apps/flutter/app
         run: |
           dart pub global activate fvm 4.3.0
-          dart pub global run fvm install --skip-pub-get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $pubCache = if ($env:PUB_CACHE) { $env:PUB_CACHE } else { Join-Path $env:LOCALAPPDATA 'Pub/Cache' }
+          & (Join-Path $pubCache 'bin/fvm.bat') install --skip-pub-get
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "$env:GITHUB_WORKSPACE/apps/flutter/app/.fvm/flutter_sdk/bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: Prepare pinned dependencies
