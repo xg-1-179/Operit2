@@ -2,6 +2,12 @@ name: Operness Performance Checks
 
 on:
   workflow_dispatch:
+  push:
+    branches: [build/operness-2.0.0-20]
+    paths:
+      - .github/workflows/operness-performance-check.yml
+      - apps/flutter/**
+      - tools/tests/android_ui_thread_contracts.test.mjs
 
 permissions:
   contents: read
