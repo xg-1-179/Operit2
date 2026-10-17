@@ -57,24 +57,24 @@ class AndroidPlatformChannel(
         try {
             val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = clipboard.primaryClip
-            val images = mutableListOf<Map<String, Any>>()
-            if (clip != null) {
-                for (index in 0 until clip.itemCount) {
-                    val uri = clip.getItemAt(index).uri
-                    if (uri != null) {
-                        val mimeType = imageMimeTypeForUri(uri)
-                        if (mimeType != null) {
-                            images.add(
-                                mapOf(
-                                    "mimeType" to mimeType,
-                                    "bytes" to readUriBytes(uri),
-                                ),
-                            )
-                        }
-                    }
-                }
+            // Clipboard access stays on main; provider IPC and file IO must not.
+            val uris = if (clip == null) emptyList() else
+                (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+            if (uris.isEmpty()) {
+                result.success(emptyList<Map<String, Any>>())
+                return
             }
-            result.success(images)
+            runtimeHost.runIo(result, "CLIPBOARD_IMAGE_READ_ERROR") {
+                val images = mutableListOf<Map<String, Any>>()
+                for (uri in uris) {
+                    val mimeType = imageMimeTypeForUri(uri) ?: continue
+                    images.add(mapOf(
+                        "mimeType" to mimeType,
+                        "bytes" to readUriBytes(uri),
+                    ))
+                }
+                images
+            }
         } catch (error: Throwable) {
             result.error("CLIPBOARD_IMAGE_READ_ERROR", error.message, null)
         }
@@ -131,16 +131,7 @@ class AndroidPlatformChannel(
     }
 
     private fun androidRuntimePaths(result: MethodChannel.Result) {
-        Thread {
-            try {
-                val response = runtimeHost.androidRuntimePathsMap()
-                activity.runOnUiThread { result.success(response) }
-            } catch (error: Throwable) {
-                activity.runOnUiThread {
-                    result.error("RUNTIME_BRIDGE_ERROR", error.message, null)
-                }
-            }
-        }.start()
+        runtimeHost.runIo(result) { runtimeHost.androidRuntimePathsMap() }
     }
 
     /** Returns the platform default runtime and workspace roots. */

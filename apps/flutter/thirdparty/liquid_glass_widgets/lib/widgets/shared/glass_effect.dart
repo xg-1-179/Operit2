@@ -81,16 +81,21 @@ class GlassEffect extends StatefulWidget {
   final EdgeInsets clipExpansion;
 
   static ui.FragmentProgram? _cachedProgram;
-  static bool _isPreparing = false;
+  static Future<void>? _preparation;
 
   /// Detects if Impeller rendering engine is active
   static bool get _canUseImpeller => ui.ImageFilter.isShaderFilterSupported;
 
   static ui.Image? _dummyImage;
 
-  static Future<void> preWarm() async {
-    if (_cachedProgram != null || _isPreparing) return;
-    _isPreparing = true;
+  static Future<void> preWarm() {
+    if (_cachedProgram != null && _dummyImage != null) return Future<void>.value();
+    return _preparation ??= _loadProgram().whenComplete(() {
+      _preparation = null;
+    });
+  }
+
+  static Future<void> _loadProgram() async {
     const path =
         'packages/liquid_glass_widgets/shaders/interactive_indicator.frag';
     const testPath = 'shaders/interactive_indicator.frag';
@@ -116,11 +121,13 @@ class GlassEffect extends StatefulWidget {
       final canvas = Canvas(recorder);
       canvas.drawColor(const Color(0x00000000), BlendMode.src);
       final picture = recorder.endRecording();
-      _dummyImage = await picture.toImage(1, 1);
+      try {
+        _dummyImage = await picture.toImage(1, 1);
+      } finally {
+        picture.dispose();
+      }
     } catch (e) {
       debugPrint('[GlassEffect] Pre-warm failed: $e');
-    } finally {
-      _isPreparing = false;
     }
   }
 
@@ -141,6 +148,7 @@ class _GlassEffectState extends State<GlassEffect>
   Offset? _lastCapturePosition;
   // Web only: guards against overlapping async captures.
   bool _isCapturingAsync = false;
+  int _captureGeneration = 0;
 
   @override
   void initState() {
@@ -183,6 +191,14 @@ class _GlassEffectState extends State<GlassEffect>
 
   GlobalKey? get _effectiveKey => widget.backgroundKey ?? _cachedScopeKey;
 
+  bool get _shouldCapture => TickerMode.of(context) &&
+      widget.quality != GlassQuality.minimal &&
+      !(!kIsWeb && GlassEffect._canUseImpeller &&
+          widget.quality == GlassQuality.premium) &&
+      widget.interactionIntensity > 0.01 &&
+      _effectiveKey != null &&
+      widget.settings.blur > 0.0;
+
   void _updateTicker() {
     // Background capture requirements:
     //  1. Widget is actively interacting (cost only paid during gesture)
@@ -191,9 +207,7 @@ class _GlassEffectState extends State<GlassEffect>
     //     glass (e.g. GlassSwitch thumb). Capturing the background would let the
     //     green track bleed through as a dark/tinted frosted overlay, which
     //     contradicts the intended white glass bloom effect.
-    final bool shouldCapture = widget.interactionIntensity > 0.01 &&
-        _effectiveKey != null &&
-        widget.settings.blur > 0.0;
+    final shouldCapture = _shouldCapture;
     if (shouldCapture &&
         _effectiveKey?.currentContext?.findRenderObject()
             is GlassCaptureRenderBoundary) {
@@ -206,13 +220,12 @@ class _GlassEffectState extends State<GlassEffect>
         //     '[GlassEffect] 📸 Starting capture loop. Intensity: ${widget.interactionIntensity.toStringAsFixed(2)}');
       }
     } else {
-      if (_ticker.isActive) {
-        _ticker.stop();
-        _backgroundImage?.dispose();
-        _backgroundImage = null;
-        // debugPrint(
-        //     '[GlassEffect] 📸 Interaction finished, cleared snapshot.');
-      }
+      _ticker.stop();
+      // Passive capture has no active ticker, but still owns a GPU image.
+      _captureGeneration++;
+      _backgroundImage?.dispose();
+      _backgroundImage = null;
+      _lastBoundary = null;
     }
   }
 
@@ -225,10 +238,9 @@ class _GlassEffectState extends State<GlassEffect>
     WidgetsBinding.instance.addPostFrameCallback((elapsed) {
       _passiveCheckPending = false;
       if (!mounted) return;
-      if (TickerMode.of(context) && widget.interactionIntensity > 0.01 &&
-          widget.settings.blur > 0) {
-        _handleTick(elapsed);
-      }
+      if (!_shouldCapture || _effectiveKey?.currentContext
+              ?.findRenderObject() is! GlassCaptureRenderBoundary) return;
+      _handleTick(elapsed);
       _queuePassiveCapture();
     });
   }
@@ -344,11 +356,12 @@ class _GlassEffectState extends State<GlassEffect>
       RenderRepaintBoundary boundary, Size size, Offset? pos) async {
     if (_isCapturingAsync) return; // prevent overlapping futures
     _isCapturingAsync = true;
+    final generation = _captureGeneration;
     final revision = boundary is GlassCaptureRenderBoundary
         ? boundary.paintRevision : null;
     try {
       final image = await boundary.toImage(pixelRatio: 1.0);
-      if (mounted) {
+      if (mounted && generation == _captureGeneration) {
         setState(() {
           _backgroundImage?.dispose();
           _backgroundImage = image;
@@ -372,7 +385,7 @@ class _GlassEffectState extends State<GlassEffect>
 
   Future<void> _initShader() async {
     // Check if shader is already available
-    if (GlassEffect._cachedProgram == null) {
+    if (GlassEffect._cachedProgram == null || GlassEffect._dummyImage == null) {
       // Shader not ready, load it asynchronously
       await GlassEffect.preWarm();
 

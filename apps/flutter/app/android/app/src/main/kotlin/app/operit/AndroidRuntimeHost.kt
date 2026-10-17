@@ -2,8 +2,6 @@ package app.operit
 
 import android.content.Context
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -19,11 +17,16 @@ class AndroidRuntimeHost(context: Context) {
     }
 
     private val applicationContext = context.applicationContext
-    private val mainHandler = Handler(Looper.getMainLooper())
     // Main-thread callbacks share only the short-lived state lock.
     private val runtimeLock = Any()
     private val runtimeCreationLock = Any()
     private val runtimeThreadIndex = AtomicInteger(0)
+    private val ioThreadIndex = AtomicInteger(0)
+    // Slow content providers must not occupy the native bridge worker pool.
+    private val ioExecutor: ExecutorService =
+        Executors.newFixedThreadPool(2) { runnable ->
+            Thread(runnable, "operit-io-${ioThreadIndex.incrementAndGet()}")
+        }
     private val runtimeExecutor: ExecutorService =
         Executors.newFixedThreadPool(8) { runnable ->
             Thread(runnable, "operit-runtime-${runtimeThreadIndex.incrementAndGet()}")
@@ -135,15 +138,36 @@ class AndroidRuntimeHost(context: Context) {
 
     /** Executes a runtime bridge call on the runtime executor. */
     fun <T> runRuntime(result: MethodChannel.Result, block: () -> T) {
-        runtimeExecutor.execute {
-            try {
-                val response = block()
-                mainHandler.post { result.success(response) }
-            } catch (error: Throwable) {
-                mainHandler.post {
-                    result.error("RUNTIME_BRIDGE_ERROR", error.message, null)
+        runOnExecutor(runtimeExecutor, result, "RUNTIME_BRIDGE_ERROR", block)
+    }
+
+    /** Runs blocking provider IO without starving native bridge requests. */
+    fun <T> runIo(
+        result: MethodChannel.Result,
+        errorCode: String = "RUNTIME_BRIDGE_ERROR",
+        block: () -> T,
+    ) {
+        runOnExecutor(ioExecutor, result, errorCode, block)
+    }
+
+    private fun <T> runOnExecutor(
+        executor: ExecutorService,
+        result: MethodChannel.Result,
+        errorCode: String,
+        block: () -> T,
+    ) {
+        try {
+            executor.execute {
+                try {
+                    val response = block()
+                    // Result is thread-safe; keep large payload encoding off main.
+                    result.success(response)
+                } catch (error: Throwable) {
+                    result.error(errorCode, error.message, null)
                 }
             }
+        } catch (error: java.util.concurrent.RejectedExecutionException) {
+            result.error(errorCode, error.message, null)
         }
     }
 
@@ -261,6 +285,7 @@ class AndroidRuntimeHost(context: Context) {
 
     /** Releases the native runtime and executor. */
     fun destroy() {
+        ioExecutor.shutdownNow()
         runtimeExecutor.shutdownNow()
         synchronized(runtimeCreationLock) {
             val handle = synchronized(runtimeLock) {

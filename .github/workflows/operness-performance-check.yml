@@ -1,0 +1,57 @@
+name: Operness Performance Checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-regressions:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.11.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install project Flutter SDK
+        shell: pwsh
+        working-directory: apps/flutter/app
+        run: |
+          dart pub global activate fvm 4.3.0
+          & "$env:APPDATA/Pub/Cache/bin/fvm.bat" install --skip-pub-get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "$env:GITHUB_WORKSPACE/apps/flutter/app/.fvm/flutter_sdk/bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Prepare pinned dependencies
+        shell: pwsh
+        run: python tools/build_scripts/prepare_android_ci_dependencies.py
+      - name: Resolve app dependencies
+        shell: pwsh
+        working-directory: apps/flutter/app
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze app and run rendering regressions
+        shell: pwsh
+        working-directory: apps/flutter/app
+        run: |
+          flutter analyze lib
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter test test/client_logger_batching_test.dart test/runtime_bootstrap_logging_test.dart test/idle_rendering_test.dart
+      - name: Analyze UI and run interaction regressions
+        shell: pwsh
+        working-directory: apps/flutter/packages/operit_ui
+        run: |
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter analyze lib/src/render/chat_input_surface.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter test test/input_glass_interaction_test.dart
+      - name: Check Android worker contracts and plugin regressions
+        shell: pwsh
+        run: |
+          npm ci --prefix tools/dsh-compat --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test tools/tests/android_ui_thread_contracts.test.mjs tools/dsh-compat/tests/*.test.mjs

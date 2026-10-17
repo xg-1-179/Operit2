@@ -62,3 +62,30 @@ and plugin workload in both runs. No APK was built in this step.
   with the project's pinned SDK before building. No APK or device profiling.
 - Native FFI ownership and Android scheduling were deliberately unchanged;
   this is application runtime optimization, not measured system-wide tuning.
+
+## Android thread and glass-animation follow-up
+
+- Clipboard image URI discovery stays on the activity thread; provider MIME
+  queries and full image reads move to a dedicated two-worker IO pool. Runtime
+  path requests reuse that pool instead of allocating a thread per request.
+  Native runtime calls retain their separate eight-worker pool. No attachment
+  compression, sampling or feature removal. Both pools shut down with the host.
+- Native results and ordered document chunks are encoded/replied on their
+  workers instead of posting large payloads back to the Android UI thread.
+  Flutter explicitly permits MethodChannel.Result callbacks on any thread:
+  https://api.flutter.dev/javadoc/io/flutter/plugin/common/MethodChannel.Result.html
+- Glass shader preparation now shares one pending future across widgets.
+  Passive capture releases its image when inactive, honors TickerMode and
+  rejects an obsolete asynchronous capture after interaction stops. Premium
+  Impeller rendering no longer also captures a background image it does not use.
+- The input rim retains its 180 ms color animation but ticks directly in
+  CustomPainter behind a repaint boundary, without per-frame widget build or
+  layout. Glass blur, refraction, scale, colors and visual settings are unchanged.
+- Local verification: 25 Node tests passed (21 DSH/plugin tests and four source
+  thread-contract tests). These source checks do not compile Kotlin or measure
+  runtime behavior. Flutter regression tests cover repaint-only rim animation
+  and independent visibility/gesture pause-resume cycles. Cloud validation is
+  provided by the manual Operness Performance Checks workflow.
+- No connected Android device is available. Actual UI/raster timings, memory
+  usage, Kotlin compilation and frame-rate improvements remain unverified.
+  The desktop Operness-2.0.0.apk is build 20 and does not contain these changes.

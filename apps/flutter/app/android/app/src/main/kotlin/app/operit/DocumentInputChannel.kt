@@ -183,9 +183,10 @@ class DocumentInputChannel(private val activity: MainActivity) {
             try {
                 if (closed.get()) throw IllegalStateException("Document input channel closed")
                 val value = operation()
-                activity.runOnUiThread { result.success(value) }
+                // Encoding a 1 MiB chunk must stay off the Android UI thread too.
+                result.success(value)
             } catch (error: Exception) {
-                activity.runOnUiThread { result.error(errorCode, error.message, null) }
+                result.error(errorCode, error.message, null)
             }
         }
     }
