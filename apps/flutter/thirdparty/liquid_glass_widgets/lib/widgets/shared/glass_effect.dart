@@ -29,6 +29,7 @@ class GlassEffect extends StatefulWidget {
     required this.settings,
     required this.interactionIntensity,
     required this.child,
+    this.interactionAnimation,
     this.quality = GlassQuality.standard,
     this.densityFactor = 0.0,
     this.backgroundKey,
@@ -56,6 +57,10 @@ class GlassEffect extends StatefulWidget {
   /// Interaction intensity (0.0 = resting, 1.0 = fully active)
   /// Drives magnification and enhancement effects
   final double interactionIntensity;
+
+  /// Optional paint-driven intensity; avoids rebuilding the glass on each tick.
+  /// When supplied, its value takes precedence over [interactionIntensity].
+  final Animation<double>? interactionAnimation;
 
   /// Minimum rim brightness regardless of light direction (default: 0.1)
   final double ambientRim;
@@ -149,6 +154,18 @@ class _GlassEffectState extends State<GlassEffect>
   // Web only: guards against overlapping async captures.
   bool _isCapturingAsync = false;
   int _captureGeneration = 0;
+  bool _captureEnabled = false;
+
+  double get _interactionIntensity =>
+      widget.interactionAnimation?.value ?? widget.interactionIntensity;
+
+  void _handleInteractionChanged() {
+    // Only a capture lifecycle transition requires a widget update. Shader
+    // intensity itself is observed directly by the render object.
+    if (mounted && _shouldCapture != _captureEnabled) {
+      setState(_updateTicker);
+    }
+  }
 
   @override
   void initState() {
@@ -160,6 +177,7 @@ class _GlassEffectState extends State<GlassEffect>
     }
 
     _ticker = createTicker(_handleTick);
+    widget.interactionAnimation?.addListener(_handleInteractionChanged);
 
     // Defer ticker update until after first frame to ensure shader is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -172,6 +190,10 @@ class _GlassEffectState extends State<GlassEffect>
   @override
   void didUpdateWidget(covariant GlassEffect oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.interactionAnimation != widget.interactionAnimation) {
+      oldWidget.interactionAnimation?.removeListener(_handleInteractionChanged);
+      widget.interactionAnimation?.addListener(_handleInteractionChanged);
+    }
     if (oldWidget.quality != widget.quality) {
       if (_activeShader == null) {
         _initShader();
@@ -195,7 +217,7 @@ class _GlassEffectState extends State<GlassEffect>
       widget.quality != GlassQuality.minimal &&
       !(!kIsWeb && GlassEffect._canUseImpeller &&
           widget.quality == GlassQuality.premium) &&
-      widget.interactionIntensity > 0.01 &&
+      _interactionIntensity > 0.01 &&
       _effectiveKey != null &&
       widget.settings.blur > 0.0;
 
@@ -208,6 +230,7 @@ class _GlassEffectState extends State<GlassEffect>
     //     green track bleed through as a dark/tinted frosted overlay, which
     //     contradicts the intended white glass bloom effect.
     final shouldCapture = _shouldCapture;
+    _captureEnabled = shouldCapture;
     if (shouldCapture &&
         _effectiveKey?.currentContext?.findRenderObject()
             is GlassCaptureRenderBoundary) {
@@ -263,7 +286,7 @@ class _GlassEffectState extends State<GlassEffect>
 
     // Capture on geometry change always; during interaction capture every frame
     // since toImageSync() is synchronous (no GPU readback, no CPU copy).
-    final bool isInteracting = widget.interactionIntensity > 0.05;
+    final bool isInteracting = _interactionIntensity > 0.05;
     bool needsCapture = _backgroundImage == null;
     needsCapture |= _lastCaptureSize != currentSize;
     needsCapture |= _lastCapturePosition != currentPos;
@@ -412,6 +435,7 @@ class _GlassEffectState extends State<GlassEffect>
 
   @override
   void dispose() {
+    widget.interactionAnimation?.removeListener(_handleInteractionChanged);
     _ticker.dispose();
     // Null backgroundImage BEFORE disposing the shader to break the reference
     // chain: _backgroundImage → render object → engine layer tree → GPU texture.
@@ -540,6 +564,7 @@ class _GlassEffectState extends State<GlassEffect>
           settings: effectiveSettings,
           shape: widget.shape,
           interactionIntensity: widget.interactionIntensity,
+          interactionAnimation: widget.interactionAnimation,
           densityFactor: widget.densityFactor,
           backdropLuma: backdropLuma,
           backgroundImage: _backgroundImage,
@@ -568,6 +593,7 @@ class _GlassEffectState extends State<GlassEffect>
           settings: effectiveSettings.copyWith(blur: 0),
           shape: widget.shape,
           interactionIntensity: widget.interactionIntensity,
+          interactionAnimation: widget.interactionAnimation,
           densityFactor: widget.densityFactor,
           backdropLuma: backdropLuma,
           backgroundImage: null, // Fallback mode
@@ -600,6 +626,7 @@ class _InteractiveIndicatorEffect extends SingleChildRenderObjectWidget {
     required this.settings,
     required this.shape,
     required this.interactionIntensity,
+    this.interactionAnimation,
     required this.densityFactor,
     required this.backdropLuma,
     this.backgroundImage,
@@ -617,6 +644,7 @@ class _InteractiveIndicatorEffect extends SingleChildRenderObjectWidget {
   final LiquidGlassSettings settings;
   final LiquidShape shape;
   final double interactionIntensity;
+  final Animation<double>? interactionAnimation;
   final double densityFactor;
   final double backdropLuma;
   final ui.Image? backgroundImage;
@@ -635,6 +663,7 @@ class _InteractiveIndicatorEffect extends SingleChildRenderObjectWidget {
       settings: settings,
       shape: shape,
       interactionIntensity: interactionIntensity,
+      interactionAnimation: interactionAnimation,
       densityFactor: densityFactor,
       backdropLuma: backdropLuma,
       backgroundImage: backgroundImage,
@@ -658,6 +687,7 @@ class _InteractiveIndicatorEffect extends SingleChildRenderObjectWidget {
       ..settings = settings
       ..shape = shape
       ..interactionIntensity = interactionIntensity
+      ..interactionAnimation = interactionAnimation
       ..densityFactor = densityFactor
       ..backdropLuma = backdropLuma
       ..backgroundImage = backgroundImage
@@ -677,6 +707,7 @@ class _RenderInteractiveIndicator extends RenderProxyBox {
     required LiquidGlassSettings settings,
     required LiquidShape shape,
     required double interactionIntensity,
+    Animation<double>? interactionAnimation,
     required double densityFactor,
     required double backdropLuma,
     ui.Image? backgroundImage,
@@ -691,6 +722,7 @@ class _RenderInteractiveIndicator extends RenderProxyBox {
         _settings = settings,
         _shape = shape,
         _interactionIntensity = interactionIntensity,
+        _interactionAnimation = interactionAnimation,
         _densityFactor = densityFactor,
         _backdropLuma = backdropLuma,
         _backgroundImage = backgroundImage,
@@ -728,6 +760,27 @@ class _RenderInteractiveIndicator extends RenderProxyBox {
     if (_interactionIntensity == value) return;
     _interactionIntensity = value;
     markNeedsPaint();
+  }
+
+  Animation<double>? _interactionAnimation;
+  set interactionAnimation(Animation<double>? value) {
+    if (identical(_interactionAnimation, value)) return;
+    if (attached) _interactionAnimation?.removeListener(markNeedsPaint);
+    _interactionAnimation = value;
+    if (attached) _interactionAnimation?.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _interactionAnimation?.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _interactionAnimation?.removeListener(markNeedsPaint);
+    super.detach();
   }
 
   double _densityFactor;
@@ -988,7 +1041,8 @@ class _RenderInteractiveIndicator extends RenderProxyBox {
         index++,
         _densityFactor.clamp(0.0,
             1.0)); // 20: uDensityFactor (float) - Elevation physics (0.0-1.0)
-    _shader.setFloat(index++, _interactionIntensity.clamp(0.0, 1.0));
+    _shader.setFloat(index++,
+        (_interactionAnimation?.value ?? _interactionIntensity).clamp(0.0, 1.0));
 
     // Background Mapping Uniforms
     _shader.setFloat(index++, bgOrigin.dx);

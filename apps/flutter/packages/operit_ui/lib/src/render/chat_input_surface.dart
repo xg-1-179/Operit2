@@ -253,18 +253,56 @@ class _InteractiveInputGlass extends StatefulWidget {
   State<_InteractiveInputGlass> createState() => _InteractiveInputGlassState();
 }
 
-class _InteractiveInputGlassState extends State<_InteractiveInputGlass> {
+class _InteractiveInputGlassState extends State<_InteractiveInputGlass>
+    with SingleTickerProviderStateMixin {
   final Set<int> _pointers = <int>{};
   bool _hovered = false;
+  bool _reducedMotion = false;
+  late final AnimationController _interaction = AnimationController(
+    vsync: this,
+    upperBound: 0.6,
+    duration: const Duration(milliseconds: 180),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reducedMotion = MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.accessibleNavigationOf(context);
+    _animateInteraction();
+  }
+
+  void _animateInteraction() {
+    if (_reducedMotion) {
+      _interaction.value = 0;
+    } else {
+      _interaction.animateTo(
+        _pointers.isNotEmpty ? 0.6 : 0,
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _interaction.dispose();
+    super.dispose();
+  }
 
   void _press(int pointer) {
     final wasPressed = _pointers.isNotEmpty;
     _pointers.add(pointer);
-    if (!wasPressed) setState(() {});
+    if (!wasPressed) {
+      _animateInteraction();
+      setState(() {});
+    }
   }
 
   void _release(int pointer) {
-    if (_pointers.remove(pointer) && _pointers.isEmpty) setState(() {});
+    if (_pointers.remove(pointer) && _pointers.isEmpty) {
+      _animateInteraction();
+      setState(() {});
+    }
   }
 
   @override
@@ -314,6 +352,7 @@ class _InteractiveInputGlassState extends State<_InteractiveInputGlass> {
                         settings: widget.settings,
                         // Resting glass must not keep a background capture ticker alive.
                         interactionIntensity: pressed && !reducedMotion ? 0.6 : 0,
+                        interactionAnimation: _interaction,
                         ambientRim: 0.11,
                         baseAlphaMultiplier: 0.75,
                         edgeAlphaMultiplier: 0.75,

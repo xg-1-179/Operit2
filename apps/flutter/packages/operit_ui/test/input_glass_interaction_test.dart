@@ -36,9 +36,20 @@ void main() {
     final gesture = await tester.startGesture(tester.getCenter(find.byType(AgentInputSurface)));
     await tester.pump();
     expect(tester.widget<GlassEffect>(find.byType(GlassEffect)).interactionIntensity, 0.6);
+    final animation = tester.widget<GlassEffect>(find.byType(GlassEffect)).interactionAnimation!;
+    expect(animation.value, 0);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(animation.value, inExclusiveRange(0, 0.6));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(animation.value, closeTo(0.6, 0.0001));
     await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(animation.value, inExclusiveRange(0, 0.6));
     await tester.pumpAndSettle();
+    expect(animation.value, 0);
     expect(tester.widget<GlassEffect>(find.byType(GlassEffect)).interactionIntensity, 0);
+    expect(tester.widget<GlassEffect>(find.byType(GlassEffect)).interactionAnimation!.value, 0);
     expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
   });
 
@@ -99,6 +110,25 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(tester.binding.transientCallbackCount, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('refraction ticks retain the input subtree and stop on disposal', (tester) async {
+    await tester.pumpWidget(scene());
+    await tester.pumpAndSettle();
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(AgentInputSurface)),
+    );
+    await tester.pump();
+    final glass = tester.widget<GlassEffect>(find.byType(GlassEffect));
+    final animation = glass.interactionAnimation!;
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(animation.value, greaterThan(0));
+    expect(tester.widget<GlassEffect>(find.byType(GlassEffect)), same(glass));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await gesture.cancel();
+    await tester.pumpAndSettle();
     expect(tester.binding.transientCallbackCount, 0);
     expect(tester.takeException(), isNull);
   });

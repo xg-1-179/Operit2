@@ -316,10 +316,10 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: placement.maxHeight),
                     child: AgentModelSelectorPopup(
-                    key: _modelPopupWidgetKey,
-                    viewModel: widget.viewModel,
-                    onDismiss: _dismissModelSettingsPopup,
-                    onModelChanged: _handleModelChanged,
+                        key: _modelPopupWidgetKey,
+                        viewModel: widget.viewModel,
+                        onDismiss: _dismissModelSettingsPopup,
+                        onModelChanged: _handleModelChanged,
                     ),
                   ),
                 ),
@@ -374,10 +374,10 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: placement.maxHeight),
                     child: AgentInputMenuPopup(
-                    viewModel: viewModel,
-                    currentChatId: chatId,
-                    onDismiss: _dismissInputMenuPopup,
-                    isChatContextCurrent: isChatContextCurrent,
+                        viewModel: viewModel,
+                        currentChatId: chatId,
+                        onDismiss: _dismissInputMenuPopup,
+                        isChatContextCurrent: isChatContextCurrent,
                     ),
                   ),
                 ),
@@ -421,23 +421,23 @@ class _AgentChatInputSectionState extends State<AgentChatInputSection>
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: placement.maxHeight),
                     child: ChatAttachmentMenuPopup(
-                    clients: widget.viewModel.clients,
-                    chatId: widget.currentChatId,
-                    onDismiss: _dismissAttachmentPopup,
-                    onAttachmentResult: widget.onPluginAttachment,
-                    onAttachImage: _runAttachmentAction(widget.onAttachImage),
-                    onTakePhoto: _runAttachmentAction(widget.onTakePhoto),
-                    onAttachFile: _runAttachmentAction(widget.onAttachFile),
-                    onAttachScreenContent: _runAttachmentAction(
-                      widget.onAttachScreenContent,
-                    ),
-                    onAttachNotifications: _runAttachmentAction(
-                      widget.onAttachNotifications,
-                    ),
-                    onAttachLocation: _runAttachmentAction(
-                      widget.onAttachLocation,
-                    ),
-                    onAttachPackage: _showAttachmentPackageSelector,
+                        clients: widget.viewModel.clients,
+                        chatId: widget.currentChatId,
+                        onDismiss: _dismissAttachmentPopup,
+                        onAttachmentResult: widget.onPluginAttachment,
+                        onAttachImage: _runAttachmentAction(widget.onAttachImage),
+                        onTakePhoto: _runAttachmentAction(widget.onTakePhoto),
+                        onAttachFile: _runAttachmentAction(widget.onAttachFile),
+                        onAttachScreenContent: _runAttachmentAction(
+                          widget.onAttachScreenContent,
+                        ),
+                        onAttachNotifications: _runAttachmentAction(
+                          widget.onAttachNotifications,
+                        ),
+                        onAttachLocation: _runAttachmentAction(
+                          widget.onAttachLocation,
+                        ),
+                        onAttachPackage: _showAttachmentPackageSelector,
                     ),
                   ),
                 ),

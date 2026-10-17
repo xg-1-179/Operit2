@@ -89,3 +89,47 @@ and plugin workload in both runs. No APK was built in this step.
 - No connected Android device is available. Actual UI/raster timings, memory
   usage, Kotlin compilation and frame-rate improvements remain unverified.
   The desktop Operness-2.0.0.apk is build 20 and does not contain these changes.
+
+## Composer UI and streaming-render follow-up
+
+- Mention, model, input-action and attachment overlays now share a 200 ms
+  fade/slide/scale entrance. Their content is retained behind a repaint boundary;
+  animation ticks do not rebuild menu contents. Directional anchors resolve for
+  RTL and reduced-motion/accessibility preferences bypass the entrance.
+- Input-action, model and attachment menus share a compact theme-aware surface
+  with consistent corners, border and shadow. This is a focused composer polish,
+  not a completed redesign of every application screen. Existing glass blur,
+  refraction and plugin actions remain available.
+- Streaming Markdown reuses source-line splits and caches inline spans until
+  text, style, child nodes, link callback or inherited dependencies change.
+  The progressive reveal still rebuilds its reveal tree; it is not paint-only.
+- Added popup lifecycle/accessibility/RTL/tap regressions and Markdown math,
+  text/style and link-callback cache regressions. Flutter execution is pending:
+  the initial cloud run failed before dependency resolution because FVM's
+  package executable is not named bin/fvm.dart. The workflow now invokes
+  bin/fvm.bat from the actual PUB_CACHE and checks activation errors.
+- Re-ran 25 Node tests successfully. No connected Android device, frame timing
+  comparison, visual device QA or newly built APK is available for this batch.
+- DSH support remains a partial Cordis runtime and ToolPkg porter: tools, async
+  filesystem, HTTP, configuration, logger and storage adapters are implemented.
+  LLM, sessions, agentLoop, sandbox, approval, MCP and full Cordis compatibility
+  are not implemented. Android QuickJS installation/execution is unverified.
+
+## Continuous input refraction follow-up
+
+- Input deformation now eases between 0 and the existing 0.6 peak over 180 ms,
+  including interrupted press/release sequences. The optional intensity animation
+  notifies the shader render object directly instead of rebuilding input content
+  on each tick. Render listeners attach/detach with their render object and are
+  replaced safely when the animation source changes.
+- Capture activation still honors intensity, TickerMode, quality, background
+  availability and blur. A state update is needed only at capture transitions;
+  changed background content retains the existing capture invalidation path.
+- Existing blur, refraction, highlights, multi-touch and accessibility settings
+  are retained. Added continuous press/release and disposal regression coverage.
+- Performance CI now generates required application proxy contracts before app
+  analysis. UI interaction checks run first, independently of proxy compilation.
+  The previous app analysis failed because generated proxy files were absent;
+  that failure is not a successful rendering or application validation.
+- Local Android/DSH Node regressions: 25 passed. Flutter compilation, animation
+  regressions, device profiling and a new APK remain pending for this change.
