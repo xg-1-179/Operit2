@@ -136,6 +136,8 @@ pub struct AIToolHandlerState {
     hooks: Vec<Arc<dyn AIToolHook>>,
     toolPermissionSystem: ToolPermissionSystem,
     packageManager: Option<Arc<Mutex<RuntimePackageManager>>>,
+    toolPkgToolOwners: BTreeSet<String>,
+    toolPkgPruneListenerRegistered: bool,
 }
 
 impl AIToolHandler {
@@ -224,6 +226,8 @@ impl AIToolHandler {
                 hooks: Vec::new(),
                 toolPermissionSystem: ToolPermissionSystem::getInstance(),
                 packageManager: None,
+                toolPkgToolOwners: BTreeSet::new(),
+                toolPkgPruneListenerRegistered: false,
             })),
             executorAvailability: Arc::new(tokio::sync::Notify::new()),
             authenticatedExtensionOwner: None,
@@ -497,7 +501,49 @@ impl AIToolHandler {
             return existingPackageManager.clone();
         }
         guard.packageManager = Some(packageManager.clone());
+        let shouldRegisterPruneListener = !guard.toolPkgPruneListenerRegistered;
+        guard.toolPkgPruneListenerRegistered = true;
+        drop(guard);
+        if shouldRegisterPruneListener {
+            let handler = self.clone();
+            let mut manager = packageManager
+                .lock()
+                .expect("package manager mutex poisoned");
+            manager.addToolPkgRuntimeChangeListener(Arc::new(move |containers| {
+                let mut activePackageNames = BTreeSet::new();
+                for runtime in &containers {
+                    activePackageNames.insert(runtime.packageName.clone());
+                    for subpackage in &runtime.subpackages {
+                        activePackageNames.insert(subpackage.packageName.clone());
+                    }
+                }
+                handler.pruneInactiveToolPkgTools(&activePackageNames);
+            }));
+        }
         packageManager
+    }
+
+    /// Removes package tools whose owning container or subpackage is no longer active.
+    #[allow(non_snake_case)]
+    fn pruneInactiveToolPkgTools(&self, activePackageNames: &BTreeSet<String>) {
+        let mut guard = self.inner.lock().expect("AIToolHandler mutex poisoned");
+        let owners = guard.toolPkgToolOwners.clone();
+        for owner in owners {
+            if activePackageNames.contains(&owner) {
+                continue;
+            }
+            let prefix = format!("{owner}:");
+            let staleNames = guard
+                .availableTools
+                .keys()
+                .filter(|toolName| toolName.starts_with(&prefix))
+                .cloned()
+                .collect::<Vec<_>>();
+            for toolName in staleNames {
+                guard.availableTools.remove(&toolName);
+                guard.toolVisibility.remove(&toolName);
+            }
+        }
     }
 
     /// Returns tool names that should be visible to normal callers.
@@ -761,6 +807,13 @@ impl AIToolHandler {
                 .first()
                 .map(|tool| tool.script.contains("/* MCPJS"))
                 .unwrap_or(false);
+        if !isMcpPackage {
+            self.inner
+                .lock()
+                .expect("AIToolHandler mutex poisoned")
+                .toolPkgToolOwners
+                .insert(toolPackage.name.clone());
+        }
         let executableTools = toolPackage
             .tools
             .iter()

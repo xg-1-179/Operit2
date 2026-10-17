@@ -628,6 +628,8 @@ impl ToolPkgManager {
                 .collect::<Vec<_>>()
         };
         for entry in removed {
+            // Revert plugin effects before the engine-owned state disappears.
+            entry.engine.dispatch_lifecycle("unload");
             entry.engine.destroy();
         }
     }

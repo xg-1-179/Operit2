@@ -42,6 +42,7 @@ use operit_util::AppLogger::AppLogger;
 
 const TAG: &str = "OperitQuickJsEngine";
 const TOOLPKG_SCRIPT_TIMEOUT_SECONDS: u64 = 60;
+const TOOLPKG_LIFECYCLE_TIMEOUT_SECONDS: u64 = 5;
 type ToolPkgTextResources = BTreeMap<String, String>;
 
 #[allow(non_snake_case)]
@@ -597,6 +598,41 @@ impl JsEngineWorker {
                                 textResources,
                             )
                         },
+                    );
+                    Ok(Box::new(output))
+                }
+            }),
+        );
+        match result {
+            Ok(output) => downcastJavaScriptStateOutput(output),
+            Err(error) => Err(javaScriptExecutionErrorFromHost(error)),
+        }
+    }
+
+    /// Runs plugin lifecycle handlers and blocks until they settle or the deadline expires.
+    #[allow(non_snake_case)]
+    fn dispatch_lifecycle(
+        &self,
+        event: &str,
+        timeoutSec: u64,
+    ) -> JsExecutionResult<Option<String>> {
+        let result = self.runtimeHost.executeHostJavaScriptRuntimeStateTask(
+            self.stateHandle,
+            timeoutSec
+                .checked_mul(1_000)
+                .expect("ToolPkg lifecycle timeout must fit in milliseconds"),
+            Box::new({
+                let event = event.to_string();
+                move |state, interrupt| {
+                    let state = state.downcast_mut::<JsEngineState>().ok_or_else(|| {
+                        HostError::new("JavaScript runtime state type does not match")
+                    })?;
+                    let output = executeWithInterrupt(
+                        state,
+                        interrupt,
+                        timeoutSec,
+                        "ToolPkg lifecycle",
+                        |state| state.dispatch_lifecycle_on_current_thread(&event, timeoutSec),
                     );
                     Ok(Box::new(output))
                 }
@@ -1532,6 +1568,81 @@ impl JsEngineState {
         self.evalJavaScriptVoid(&runtimeBridge)
             .map_err(JsExecutionError::runtime)?;
         registrationResult
+    }
+
+    /// Invokes registered unload handlers on this engine thread before disposal.
+    #[allow(non_snake_case)]
+    fn dispatch_lifecycle_on_current_thread(
+        &mut self,
+        event: &str,
+        timeoutSec: u64,
+    ) -> JsExecutionResult<Option<String>> {
+        self.initJavaScriptEnvironment()
+            .map_err(JsExecutionError::initialization)?;
+        let source = packageTextResourceSource(self.toolPkgContext.as_ref());
+        CURRENT_TEXT_RESOURCE_SOURCE.with(|current| {
+            *current.borrow_mut() = Some(source.clone());
+        });
+        CURRENT_EXECUTION_HOST.with(|host| {
+            *host.borrow_mut() = self.executionHost.clone();
+        });
+        let result = (|| {
+            let mut params = BTreeMap::new();
+            params.insert("event".to_string(), Value::String(event.to_string()));
+            let language = self
+                .resolveCurrentPackageLanguage()
+                .map_err(JsExecutionError::runtime)?;
+            params.insert("__operit_package_lang".to_string(), Value::String(language));
+            let callId = format!(
+                "operit_lifecycle_{}",
+                Uuid::new_v4().to_string().replace('-', "")
+            );
+            CURRENT_ACTIVE_CALL_CONTEXTS.with(|contexts| {
+                contexts.borrow_mut().insert(
+                    callId.clone(),
+                    JsCallContext {
+                        executionHost: self.executionHost.clone(),
+                        intermediateCallback: None,
+                        executionListener: None,
+                        envOverrides: Arc::new(Mutex::new(BTreeMap::new())),
+                        textResourceSource: source,
+                        ipcTiming: None,
+                    },
+                );
+            });
+            clearNativeExecutionSession(&callId);
+            if let Err(error) = self.invokeExecutionFunction(
+                &callId,
+                params,
+                "void 0;",
+                "__operitLifecycleDispatch",
+                timeoutSec,
+            ) {
+                self.cancelJavaScriptExecution(&callId);
+                return Err(JsExecutionError::runtime(error));
+            }
+            if let Err(error) = self.runJavaScriptJobs() {
+                self.cancelJavaScriptExecution(&callId);
+                return Err(JsExecutionError::runtime(error));
+            }
+            let output = match readNativeExecutionSession(&callId) {
+                Some(output) => output?,
+                None => {
+                    self.cancelJavaScriptExecution(&callId);
+                    return Err(JsExecutionError::runtime(
+                        "ToolPkg lifecycle dispatch did not complete",
+                    ));
+                }
+            };
+            clearNativeExecutionSession(&callId);
+            Ok(match output {
+                Value::Null => None,
+                Value::String(text) => Some(text),
+                other => Some(other.to_string()),
+            })
+        })();
+        clearThreadLocalCallState();
+        result
     }
 
     #[allow(non_snake_case)]
@@ -2591,6 +2702,18 @@ impl JsExecutionEngine for JsEngine {
     /// Releases this engine's JavaScript resources.
     fn destroy(&self) {
         JsEngine::destroy(self);
+    }
+
+    /// Runs registered unload handlers before this engine is destroyed.
+    fn dispatch_lifecycle(&self, event: &str) {
+        if let Err(error) =
+            self.worker.dispatch_lifecycle(event, TOOLPKG_LIFECYCLE_TIMEOUT_SECONDS)
+        {
+            AppLogger::e(
+                TAG,
+                &format!("toolpkg-lifecycle-dispatch-failed event={event} error={error:?}"),
+            );
+        }
     }
 }
 
