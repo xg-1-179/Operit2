@@ -200,3 +200,15 @@ and plugin workload in both runs. No APK was built in this step.
   redesign, measured device FPS improvement or full DeepSeek Harness host.
 - Android installation/call/unload of converted plugins remains unverified.
   Existing desktop APK build 20 does not contain this follow-up.
+
+## Accepted drag cancellation regression
+
+- Cloud run 39021219689 passed UI checks, app analysis and 26 Node tests;
+  rendering tests reported 52 passes and two cancellation failures. An accepted
+  PointerCancelEvent reaches the base drag recognizer's end callback, which
+  incorrectly committed opening the drawer.
+- The drawer recognizer now cancels the transaction before forwarding a raw
+  pointer cancellation. Further updates/end callbacks cannot commit that
+  interrupted transaction; the next gesture starts normally. The regression
+  additionally verifies a fresh gesture after cancellation. Cloud validation
+  and replacement build 21 remain pending.

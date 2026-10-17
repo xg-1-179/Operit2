@@ -403,6 +403,16 @@ class _PhoneLayoutState extends State<PhoneLayout>
 
 class _DrawerHorizontalDragGestureRecognizer
     extends HorizontalDragGestureRecognizer {
+  @override
+  void handleEvent(PointerEvent event) {
+    // An accepted drag ends even on cancellation in the base recognizer.
+    // Cancel the drawer transaction first so that onEnd cannot commit it.
+    if (event is PointerCancelEvent) {
+      onCancel?.call();
+    }
+    super.handleEvent(event);
+  }
+
   /// Keeps gestures beginning in editable or excluded content out of the arena.
   @override
   bool isPointerAllowed(PointerEvent event) {

@@ -81,6 +81,14 @@ void main() {
         expect(tester.getTopLeft(
           find.byKey(const ValueKey('cancelContent')),
         ).dx, closeTo(0, 0.01));
+        // Cancellation must not poison the next accepted gesture.
+        final nextGesture = await tester.startGesture(const Offset(20, 400));
+        await nextGesture.moveBy(const Offset(24, 0));
+        await nextGesture.moveBy(const Offset(90, 0));
+        await tester.pump();
+        await nextGesture.up();
+        await tester.pumpAndSettle();
+        expect(drawerOpen.value, isTrue);
         expect(tester.binding.hasScheduledFrame, isFalse);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
