@@ -326,16 +326,12 @@ class _InteractiveInputGlassState extends State<_InteractiveInputGlass> {
                 widget.child,
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: AnimatedContainer(
+                    child: _InputGlassRim(
                       duration: duration,
-                      decoration: BoxDecoration(
-                        borderRadius: widget.borderRadius,
-                        border: Border.all(
-                          color: active
-                              ? scheme.primary.withValues(alpha: 0.35)
-                              : scheme.onSurface.withValues(alpha: 0.10),
-                        ),
-                      ),
+                      borderRadius: widget.borderRadius,
+                      color: active
+                          ? scheme.primary.withValues(alpha: 0.35)
+                          : scheme.onSurface.withValues(alpha: 0.10),
                     ),
                   ),
                 ),
@@ -346,4 +342,80 @@ class _InteractiveInputGlassState extends State<_InteractiveInputGlass> {
       ),
     );
   }
+}
+
+/// The highlight ticks in paint, without rebuilding or laying out the input.
+class _InputGlassRim extends ImplicitlyAnimatedWidget {
+  const _InputGlassRim({
+    required super.duration,
+    required this.borderRadius,
+    required this.color,
+  });
+
+  final BorderRadius borderRadius;
+  final Color color;
+
+  @override
+  ImplicitlyAnimatedWidgetState<_InputGlassRim> createState() =>
+      _InputGlassRimState();
+}
+
+class _InputGlassRimState
+    extends ImplicitlyAnimatedWidgetState<_InputGlassRim> {
+  ColorTween? _color;
+
+  @override
+  void forEachTween(TweenVisitor<dynamic> visitor) {
+    _color = visitor(
+      _color,
+      widget.color,
+      (dynamic value) => ColorTween(begin: value as Color),
+    ) as ColorTween?;
+  }
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(
+      painter: _InputGlassRimPainter(
+        color: _color!,
+        progress: animation,
+        borderRadius: widget.borderRadius,
+        targetColor: widget.color,
+      ),
+      child: const SizedBox.expand(),
+    ),
+  );
+}
+
+class _InputGlassRimPainter extends CustomPainter {
+  _InputGlassRimPainter({
+    required this.color,
+    required this.progress,
+    required this.borderRadius,
+    required this.targetColor,
+  }) : super(repaint: progress);
+
+  final ColorTween color;
+  final Animation<double> progress;
+  final BorderRadius borderRadius;
+  final Color targetColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    canvas.drawRRect(
+      borderRadius.toRRect(Offset.zero & size).deflate(0.5),
+      Paint()
+        ..color = color.evaluate(progress)!
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _InputGlassRimPainter oldDelegate) =>
+      color != oldDelegate.color ||
+      progress != oldDelegate.progress ||
+      targetColor != oldDelegate.targetColor ||
+      borderRadius != oldDelegate.borderRadius;
 }

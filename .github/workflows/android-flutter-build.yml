@@ -174,6 +174,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm test
 
+      - name: Check Android UI thread contracts
+        shell: pwsh
+        run: node --test tools/tests/android_ui_thread_contracts.test.mjs
+
       - name: Check build environment
         shell: pwsh
         run: python tools/build_scripts/check_build_environment.py --products app --github-runner
@@ -211,7 +215,7 @@ jobs:
       - name: Test client logging batching
         working-directory: apps/flutter/app
         shell: pwsh
-        run: fvm flutter test test/client_logger_batching_test.dart test/runtime_bootstrap_logging_test.dart
+        run: fvm flutter test test/client_logger_batching_test.dart test/runtime_bootstrap_logging_test.dart test/idle_rendering_test.dart
 
       - name: Test glass interactions
         working-directory: apps/flutter/packages/operit_ui
