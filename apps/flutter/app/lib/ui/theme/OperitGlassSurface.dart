@@ -19,6 +19,7 @@ class OperitGlassSurface extends StatelessWidget {
     this.transparentAlpha,
     this.material = false,
     this.enableBackdropFilter = true,
+    this.groupBackdropFilter = false,
     this.clip = true,
   });
 
@@ -33,6 +34,9 @@ class OperitGlassSurface extends StatelessWidget {
 
   /// Keeps translucent styling without paying for a per-surface blur pass.
   final bool enableBackdropFilter;
+
+  /// Share only within a local group of non-overlapping surfaces.
+  final bool groupBackdropFilter;
   final bool clip;
 
   @override
@@ -50,6 +54,7 @@ class OperitGlassSurface extends StatelessWidget {
       transparentAlpha: transparentAlpha,
       material: material,
       enableBackdropFilter: enableBackdropFilter,
+      groupBackdropFilter: groupBackdropFilter,
       clip: clip,
     );
   }

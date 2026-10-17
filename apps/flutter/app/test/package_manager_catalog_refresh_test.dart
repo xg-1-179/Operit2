@@ -19,6 +19,30 @@ import 'package:operit2/ui/common/contributions/ChatSidebarTabHost.dart';
 
 /// Verifies installation notifications update an already mounted package list.
 void main() {
+  testWidgets('plugin sorting preserves saved order and handles new entries', (tester) async {
+    final bridge = _CatalogBridge()
+      ..installed = true
+      ..pluginFixtures = [
+        _pluginRuntime(packageName: 'new_z', displayName: 'New Z'),
+        _pluginRuntime(packageName: 'saved_a', displayName: 'Saved A'),
+        _pluginRuntime(packageName: 'new_a', displayName: 'New A'),
+        _pluginRuntime(packageName: 'saved_z', displayName: 'Saved Z'),
+      ]
+      ..pluginOrder = ['saved_z', 'saved_a'];
+    addTearDown(bridge.revisions.close);
+    await tester.pumpWidget(_manager(bridge));
+    await tester.pumpAndSettle();
+    final labels = ['Saved Z', 'Saved A', 'New A', 'New Z'];
+    for (var i = 1; i < labels.length; i++) {
+      expect(tester.getTopLeft(find.text(labels[i])).dy,
+          greaterThan(tester.getTopLeft(find.text(labels[i - 1])).dy));
+    }
+    expect(tester.takeException(), isNull);
+    expect(bridge.catalogReads, 1);
+    expect(bridge.scans, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   for (final selection in <String>[
     chatSidebarTabIdentity('demo_toolpkg', 'sidebar-demo'),
     chatSidebarTabIdentity('another_toolpkg', 'sidebar-demo'),
@@ -370,6 +394,8 @@ class _CatalogBridge extends OperitRuntimeBridge {
   int activeCatalogReads = 0;
   int maxActiveCatalogReads = 0;
   bool installed = false;
+  List<core_proxy.ToolPkgContainerRuntime>? pluginFixtures;
+  List<String> pluginOrder = [];
   bool enabled = false;
   Object? disableError;
   final preferences = <String, String>{};
@@ -407,7 +433,9 @@ class _CatalogBridge extends OperitRuntimeBridge {
           maxActiveCatalogReads,
           activeCatalogReads,
         );
-        final result = installed ? [_pluginRuntime().toJson()] : [];
+        final result = installed
+            ? (pluginFixtures ?? [_pluginRuntime()]).map((plugin) => plugin.toJson()).toList()
+            : [];
         final started = catalogReadStarted;
         catalogReadStarted = null;
         started?.complete();
@@ -439,6 +467,7 @@ class _CatalogBridge extends OperitRuntimeBridge {
         mutations.add('selection');
         return null;
       case 'getToolPkgContainerOrder':
+        return pluginOrder;
       case 'getBundledExternalPackageCandidates':
       case 'getBundledExternalToolPkgContainerRuntimes':
       case 'getToolPkgLoadIssues':
@@ -449,12 +478,15 @@ class _CatalogBridge extends OperitRuntimeBridge {
 }
 
 /// Creates an installed plugin fixture for catalog refresh assertions.
-core_proxy.ToolPkgContainerRuntime _pluginRuntime() {
-  return const core_proxy.ToolPkgContainerRuntime(
+core_proxy.ToolPkgContainerRuntime _pluginRuntime({
+  String packageName = 'demo_toolpkg',
+  String displayName = 'Demo ToolPkg',
+}) {
+  return core_proxy.ToolPkgContainerRuntime(
     chatLifecycleHooks: [],
-    packageName: 'demo_toolpkg',
+    packageName: packageName,
     displayName: core_proxy.LocalizedText(
-      values: <String, String>{'default': 'Demo ToolPkg'},
+      values: <String, String>{'default': displayName},
     ),
     description: core_proxy.LocalizedText(
       values: <String, String>{'default': 'DSL test package'},

@@ -17,6 +17,7 @@ class ThemeGlassSurface extends StatelessWidget {
     this.transparentAlpha,
     this.material = false,
     this.enableBackdropFilter = true,
+    this.groupBackdropFilter = false,
     this.clip = true,
   });
 
@@ -32,6 +33,9 @@ class ThemeGlassSurface extends StatelessWidget {
 
   /// Keeps translucent styling without paying for a per-surface blur pass.
   final bool enableBackdropFilter;
+
+  /// Opts non-overlapping siblings into their local BackdropGroup.
+  final bool groupBackdropFilter;
   final bool clip;
 
   @override
@@ -74,11 +78,12 @@ class ThemeGlassSurface extends StatelessWidget {
         DecoratedBox(decoration: decoration, child: content),
       );
     }
+    final filter = ui.ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur);
+    final decorated = DecoratedBox(decoration: decoration, child: content);
     return _clipBackdrop(
-      BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
-        child: DecoratedBox(decoration: decoration, child: content),
-      ),
+      groupBackdropFilter
+          ? BackdropFilter.grouped(filter: filter, child: decorated)
+          : BackdropFilter(filter: filter, child: decorated),
     );
   }
 

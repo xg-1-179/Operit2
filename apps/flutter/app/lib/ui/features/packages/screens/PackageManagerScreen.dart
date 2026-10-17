@@ -689,8 +689,18 @@ class _PackageManagerScreenState extends State<PackageManagerScreen>
 
   List<core_proxy.ToolPkgContainerRuntime> get _filteredPlugins {
     final query = _searchQuery.trim().toLowerCase();
+    final order = <String, int>{
+      for (var index = 0; index < _snapshot.pluginContainerOrder.length; index++)
+        _snapshot.pluginContainerOrder[index]: index,
+    };
     final items = _snapshot.pluginContainers.toList()
-      ..sort(_comparePluginOrder);
+      ..sort((left, right) {
+        final comparison = (order[left.packageName] ?? order.length)
+            .compareTo(order[right.packageName] ?? order.length);
+        return comparison != 0
+            ? comparison
+            : left.packageName.compareTo(right.packageName);
+      });
     if (query.isEmpty) {
       return items;
     }
@@ -798,22 +808,6 @@ class _PackageManagerScreenState extends State<PackageManagerScreen>
         );
       },
     );
-  }
-
-  /// Compares ToolPkg containers using the persisted package-manager order.
-  int _comparePluginOrder(
-    core_proxy.ToolPkgContainerRuntime left,
-    core_proxy.ToolPkgContainerRuntime right,
-  ) {
-    final order = <String, int>{
-      for (
-        var index = 0;
-        index < _snapshot.pluginContainerOrder.length;
-        index += 1
-      )
-        _snapshot.pluginContainerOrder[index]: index,
-    };
-    return order[left.packageName]!.compareTo(order[right.packageName]!);
   }
 
   /// Moves one plugin before the selected plugin and persists the complete order.

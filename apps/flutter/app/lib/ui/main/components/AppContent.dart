@@ -75,6 +75,7 @@ class _AppContentState extends State<AppContent> {
   bool _isTransitioning = false;
   bool _transitionAllowsCrossfade = true;
   Timer? _transitionTimer;
+  int _transitionGeneration = 0;
   ValueListenable<bool>? _drawerMotion;
   ValueListenable<int>? _drawerContentActivation;
   String? _drawerSnapshotScreenKey;
@@ -158,6 +159,7 @@ class _AppContentState extends State<AppContent> {
 
     _drawerSnapshotScreenKey = null;
     _transitionTimer?.cancel();
+    final generation = ++_transitionGeneration;
     _removePendingScreen(currentScreenKey);
     final canCrossfade =
         fromScreen.participatesInCrossfadeTransition &&
@@ -175,15 +177,18 @@ class _AppContentState extends State<AppContent> {
       return;
     }
 
-    _transitionTimer = Timer(_activeTransitionDuration, () {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isTransitioning = false;
-        _transitionFromKey = null;
-        _transitionAllowsCrossfade = true;
-        _removePendingScreen(_currentScreenKey);
+    // The entrance starts after mount; do not spend its duration building the
+    // first frame of a heavy settings or management page.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _transitionGeneration) return;
+      _transitionTimer = Timer(_activeTransitionDuration, () {
+        if (!mounted || generation != _transitionGeneration) return;
+        setState(() {
+          _isTransitioning = false;
+          _transitionFromKey = null;
+          _transitionAllowsCrossfade = true;
+          _removePendingScreen(_currentScreenKey);
+        });
       });
     });
   }
@@ -259,10 +264,7 @@ class _AppContentState extends State<AppContent> {
         effectivePreviousKey,
     ];
 
-    return AnimatedBuilder(
-      animation: mainLayoutController,
-      builder: (context, _) {
-        final frame = Column(
+    final frame = Column(
           children: <Widget>[
             AnimatedBuilder(
               animation: widget.topBarController,
@@ -348,6 +350,10 @@ class _AppContentState extends State<AppContent> {
             ),
           ],
         );
+    return AnimatedBuilder(
+      animation: mainLayoutController,
+      child: frame,
+      builder: (context, child) {
         // Scaffold avoids the keyboard, but not system navigation controls.
         // Pages that own the bottom inset can extend their surfaces beneath
         // system controls. Other pages keep the shared safe boundary. The top
@@ -357,7 +363,7 @@ class _AppContentState extends State<AppContent> {
           top: false,
           bottom: !widget.currentScreen.handlesBottomSafeArea,
           child: SizedBox.expand(
-            child: mainLayoutController.decorate(context, frame),
+            child: mainLayoutController.decorate(context, child!),
           ),
         );
       },

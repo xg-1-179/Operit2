@@ -11,6 +11,28 @@ import 'package:operit2/ui/theme/OperitTheme.dart';
 
 /// Verifies page transitions preserve cached state and isolate animation work.
 void main() {
+  testWidgets('attachment refresh retains the page frame widgets', (tester) async {
+    final selected = ValueNotifier<int>(0);
+    addTearDown(selected.dispose);
+    await _pumpMainPages(tester, selected, _PageCounts());
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(AppContent));
+    final layout = MainLayoutScope.of(context);
+    final owner = Object();
+    layout.setAttachment((context, child) => child, owner: owner);
+    await tester.pumpAndSettle();
+    final frame = tester.widget<Column>(
+      find.descendant(of: find.byType(AppContent), matching: find.byType(Column)).first,
+    );
+    for (var i = 0; i < 5; i++) {
+      layout.refreshAttachment(owner: owner);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Column>(
+        find.descendant(of: find.byType(AppContent), matching: find.byType(Column)).first,
+      ), same(frame));
+    }
+  });
+
   testWidgets('cached main pages remain mounted when hidden and restored', (
     tester,
   ) async {

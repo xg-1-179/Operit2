@@ -51,7 +51,8 @@ class SettingsCategoryList extends StatelessWidget {
       ),
     ];
     final theme = Theme.of(context);
-    return ListView(
+    return BackdropGroup(
+      child: ListView(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 16),
       children: <Widget>[
         SettingsCategoryTile(
@@ -59,6 +60,7 @@ class SettingsCategoryList extends StatelessWidget {
           selected: selectedCategory == SettingsCategory.accessLinks,
           onTap: () => onCategorySelected(SettingsCategory.accessLinks),
           prominent: true,
+          groupBackdropFilter: true,
         ),
         for (final groupEntry in groups.asMap().entries) ...<Widget>[
           Padding(
@@ -77,9 +79,11 @@ class SettingsCategoryList extends StatelessWidget {
               spec: SettingsCategorySpec.of(category, l10n),
               selected: selectedCategory == category,
               onTap: () => onCategorySelected(category),
+              groupBackdropFilter: true,
             ),
         ],
       ],
+      ),
     );
   }
 }
@@ -98,12 +102,14 @@ class SettingsCategoryTile extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.prominent = false,
+    this.groupBackdropFilter = false,
   });
 
   final SettingsCategorySpec spec;
   final bool selected;
   final VoidCallback onTap;
   final bool prominent;
+  final bool groupBackdropFilter;
 
   /// Builds a selectable tile for one settings category.
   @override
@@ -128,6 +134,7 @@ class SettingsCategoryTile extends StatelessWidget {
               : colorScheme.outlineVariant.withValues(alpha: 0.18),
         ),
         material: true,
+        groupBackdropFilter: groupBackdropFilter,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,

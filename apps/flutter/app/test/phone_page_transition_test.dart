@@ -70,6 +70,9 @@ void main() {
             .widget<DrawerContent>(find.byType(DrawerContent))
             .onNavigationEntrySelected(_nextEntry);
         await tester.pump();
+        expect(host.selected.value, 0);
+        expect(host.initializations[1], 0);
+        await _finishDrawerNavigation(tester, host);
         final outgoing = _snapshot(tester, 0);
         final incoming = _snapshot(tester, 1);
         expect(host.drawerOpen.value, isFalse);
@@ -129,10 +132,62 @@ void main() {
         expect(outgoing.controller.allowSnapshotting, isTrue);
         expect(outgoingBoundary.debugLayer!.parent, isNull);
         expect(host.paints[0], paintCount);
+        expect(host.initializations[1], 0);
+        await _finishDrawerNavigation(tester, host);
         expect(tester.state(_page(0)), same(pageState));
         expect(_snapshot(tester, 1).controller.allowSnapshotting, isFalse);
         await tester.pumpAndSettle();
         await tester.pumpWidget(const SizedBox.shrink());
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'pending drawer navigation uses the latest entry (effects: $effects)',
+      (tester) async {
+        final host = _PhonePageHarness();
+        addTearDown(host.dispose);
+        await host.pump(tester, effects: effects);
+        await tester.pumpAndSettle();
+        host.drawerOpen.value = true;
+        await tester.pumpAndSettle();
+        final drawer = tester.widget<DrawerContent>(find.byType(DrawerContent));
+        drawer.onNavigationEntrySelected(_nextEntry);
+        await tester.pump(const Duration(milliseconds: 16));
+        drawer.onNavigationEntrySelected(_thirdEntry);
+        expect(host.initializations, <int>[1, 0, 0]);
+        await tester.pumpAndSettle();
+        expect(host.selected.value, 2);
+        expect(host.initializations, <int>[1, 0, 1]);
+        await tester.pumpWidget(const SizedBox.shrink());
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'reopening or disposing cancels queued navigation (effects: $effects)',
+      (tester) async {
+        final host = _PhonePageHarness();
+        addTearDown(host.dispose);
+        await host.pump(tester, effects: effects);
+        await tester.pumpAndSettle();
+        host.drawerOpen.value = true;
+        await tester.pumpAndSettle();
+        final drawer = tester.widget<DrawerContent>(find.byType(DrawerContent));
+        drawer.onNavigationEntrySelected(_nextEntry);
+        await tester.pump(const Duration(milliseconds: 16));
+        host.drawerOpen.value = true;
+        await tester.pumpAndSettle();
+        host.drawerOpen.value = false;
+        await tester.pumpAndSettle();
+        expect(host.selected.value, 0);
+        expect(host.initializations[1], 0);
+        host.drawerOpen.value = true;
+        await tester.pumpAndSettle();
+        drawer.onNavigationEntrySelected(_nextEntry);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        expect(host.selected.value, 0);
         expect(tester.takeException(), isNull);
       },
     );
@@ -269,6 +324,26 @@ const _nextEntry = NavigationEntrySpec(
   icon: Icons.settings,
 );
 
+const _thirdEntry = NavigationEntrySpec(
+  entryId: 'third-page',
+  routeId: 'route-2',
+  surface: NavigationSurface.mainSidebarSystem,
+  title: 'Third page',
+  icon: Icons.extension,
+);
+
+/// Stops at the incoming page's first frame rather than settling its animation.
+Future<void> _finishDrawerNavigation(
+  WidgetTester tester,
+  _PhonePageHarness host,
+) async {
+  for (var frame = 0; frame < 120 && host.selected.value == 0; frame++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  expect(host.selected.value, isNot(0));
+  await tester.pump();
+}
+
 /// Finds a page even while its cached slot is offstage.
 Finder _page(int index) =>
     find.byKey(ValueKey<int>(index), skipOffstage: false);
@@ -370,9 +445,9 @@ class _PhonePageHarness {
                 enableNavigationAnimation: effects,
                 onOpenDrawer: () => drawerOpen.value = true,
                 onCloseDrawer: () => drawerOpen.value = false,
-                onNavigationEntrySelected: (_) {
+                onNavigationEntrySelected: (entry) {
                   drawerOpen.value = false;
-                  selected.value = 1;
+                  selected.value = entry.routeId == 'route-2' ? 2 : 1;
                 },
                 onConversationActivated: () => drawerOpen.value = false,
               ),

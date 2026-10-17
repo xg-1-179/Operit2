@@ -71,6 +71,7 @@ class _PhoneLayoutState extends State<PhoneLayout>
   double _dragStartProgress = 0;
   bool _dragging = false;
   bool _committingDrag = false;
+  NavigationEntrySpec? _pendingNavigationEntry;
 
   /// Connects the drawer state to its spring animation and motion lifecycle.
   @override
@@ -88,6 +89,9 @@ class _PhoneLayoutState extends State<PhoneLayout>
   @override
   void didUpdateWidget(covariant PhoneLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedRouteId != widget.selectedRouteId) {
+      _pendingNavigationEntry = null;
+    }
     if (oldWidget.drawerOpenState != widget.drawerOpenState) {
       oldWidget.drawerOpenState.removeListener(_animateDrawerProgress);
       widget.drawerOpenState.addListener(_animateDrawerProgress);
@@ -112,11 +116,23 @@ class _PhoneLayoutState extends State<PhoneLayout>
   void _handleDrawerAnimationStatus(AnimationStatus status) {
     _drawerIsAnimating.value =
         _dragging || _drawerProgressController.isAnimating;
+    if (!_drawerIsAnimating.value && !widget.drawerOpenState.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _dragging ||
+            _drawerProgressController.isAnimating ||
+            widget.drawerOpenState.value) return;
+        final entry = _pendingNavigationEntry;
+        _pendingNavigationEntry = null;
+        if (entry != null) _activateNavigationEntry(entry);
+      });
+      WidgetsBinding.instance.ensureVisualUpdate();
+    }
   }
 
   /// Retargets the drawer spring from its current position and velocity.
   void _animateDrawerProgress({double? releaseVelocity}) {
     if (_committingDrag) return;
+    if (widget.drawerOpenState.value) _pendingNavigationEntry = null;
     _dragging = false;
     final target = widget.drawerOpenState.value ? 1.0 : 0.0;
     final dampingRatio = widget.drawerOpenState.value
@@ -135,20 +151,34 @@ class _PhoneLayoutState extends State<PhoneLayout>
     _drawerProgressController.animateWith(simulation);
   }
 
-  /// Releases current-page freezing after a drawer navigation action begins.
+  /// Mounts expensive routes after the drawer spring, without a fixed delay.
   void _handleNavigationEntrySelected(NavigationEntrySpec entry) {
+    if (entry.action != null ||
+        (!widget.drawerOpenState.value &&
+            !_drawerProgressController.isAnimating && !_dragging)) {
+      _pendingNavigationEntry = null;
+      _activateNavigationEntry(entry);
+      return;
+    }
+    _pendingNavigationEntry = entry;
+    widget.onCloseDrawer();
+  }
+
+  void _activateNavigationEntry(NavigationEntrySpec entry) {
     widget.onNavigationEntrySelected(entry);
     _contentActivation.value++;
   }
 
   /// Keeps in-page conversation loading live when the drawer closes.
   void _handleConversationActivated() {
+    _pendingNavigationEntry = null;
     widget.onConversationActivated();
     _contentActivation.value++;
   }
 
   /// Resets accumulated movement for a new drawer gesture.
   void _handleHorizontalDragStart(DragStartDetails details) {
+    _pendingNavigationEntry = null;
     _currentDrag = 0;
     _dragStartProgress = _drawerProgressController.value.clamp(0.0, 1.0);
     _dragging = true;
