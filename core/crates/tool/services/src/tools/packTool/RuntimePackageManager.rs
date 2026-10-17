@@ -1424,7 +1424,86 @@ impl RuntimePackageManager {
         let runtimes = self
             .toolPkgManager()
             .getEnabledToolPkgContainerRuntimes(&self.getEnabledPackageNames());
+        let enabledPackageNames = self.getEnabledPackageNameSetInternal();
+        let runtimes = runtimes
+            .into_iter()
+            .filter(|runtime| {
+                !Self::containerStrictDependencies(runtime)
+                    || self.containerDependenciesSatisfied(runtime, &enabledPackageNames)
+            })
+            .collect::<Vec<_>>();
         self.orderToolPkgRuntimes(runtimes)
+    }
+
+    /// Returns whether a container opted into Cordis-style reactive dependency activation.
+    fn containerStrictDependencies(runtime: &ToolPkgContainerRuntime) -> bool {
+        runtime
+            .manifestExtensions
+            .get("strict_dependencies")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Returns whether every declared prerequisite is installed, enabled, and version-compatible.
+    fn containerDependenciesSatisfied(
+        &self,
+        runtime: &ToolPkgContainerRuntime,
+        enabledPackageNames: &BTreeSet<String>,
+    ) -> bool {
+        runtime.requires.iter().all(|requirement| {
+            let dependencyId = self.normalizePackageName(&requirement.id);
+            let Some(dependency) = self
+                .toolPkgManager()
+                .getToolPkgContainerRuntime(&dependencyId)
+            else {
+                return false;
+            };
+            let dependencyEnabled = enabledPackageNames.contains(&dependencyId)
+                || dependency
+                    .subpackages
+                    .iter()
+                    .any(|subpackage| enabledPackageNames.contains(&subpackage.packageName));
+            if !dependencyEnabled {
+                return false;
+            }
+            let minimumSatisfied = requirement.minVersion.as_ref().map_or(true, |minimum| {
+                operit_util::GithubReleaseUtil::GithubReleaseUtil::compareVersions(
+                    &dependency.version,
+                    minimum,
+                )
+                .map(|order| order >= 0)
+                .unwrap_or(false)
+            });
+            let maximumSatisfied = requirement.maxVersion.as_ref().map_or(true, |maximum| {
+                operit_util::GithubReleaseUtil::GithubReleaseUtil::compareVersions(
+                    &dependency.version,
+                    maximum,
+                )
+                .map(|order| order <= 0)
+                .unwrap_or(false)
+            });
+            minimumSatisfied && maximumSatisfied
+        })
+    }
+
+    /// Returns whether a package may run now, honoring strict dependency activation.
+    pub fn isPackageRuntimeActive(&self, packageName: &str) -> bool {
+        let normalizedPackageName = self.normalizePackageName(packageName);
+        let containerPackageName = self
+            .toolPkgManager()
+            .resolveToolPkgSubpackageRuntimeInternal(&normalizedPackageName)
+            .map(|subpackage| subpackage.containerPackageName)
+            .unwrap_or(normalizedPackageName);
+        let Some(runtime) = self
+            .toolPkgManager()
+            .getToolPkgContainerRuntime(&containerPackageName)
+        else {
+            return true;
+        };
+        if !Self::containerStrictDependencies(&runtime) {
+            return true;
+        }
+        self.containerDependenciesSatisfied(&runtime, &self.getEnabledPackageNameSetInternal())
     }
 
     #[allow(non_snake_case)]
@@ -2130,6 +2209,9 @@ impl RuntimePackageManager {
     /// Returns package tools with active state applied.
     #[operit_route_macros::operit_plugin_sdk_expose]
     pub fn getEffectivePackageTools(&self, packageName: &str) -> Option<ToolPackage> {
+        if !self.isPackageRuntimeActive(packageName) {
+            return None;
+        }
         self.pluginPackageManager.effectivePackage(packageName)
     }
 

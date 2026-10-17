@@ -622,6 +622,39 @@ pub fn buildToolPkgRegistrationBridgeScript(restrictHostCapabilities: bool) -> S
         }
 
         var toolPkgApi = requireToolPkgApiRuntime();
+
+        // Collects cleanup callbacks so disabling or reloading a package can revert its effects.
+        function registerUnloadHandler(handler) {
+            if (typeof handler !== 'function') {
+                throw new Error('ToolPkg.onUnload expects a function');
+            }
+            var handlers = root.__operitUnloadHandlers;
+            if (!Array.isArray(handlers)) {
+                handlers = [];
+                root.__operitUnloadHandlers = handlers;
+            }
+            handlers.push(handler);
+        }
+
+        // Runs every registered unload handler in reverse registration order, awaiting each one.
+        root.__operitLifecycleDispatch = async function(event) {
+            var handlers = root.__operitUnloadHandlers;
+            if (!Array.isArray(handlers) || handlers.length === 0) {
+                return;
+            }
+            var pending = handlers.slice();
+            handlers.length = 0;
+            for (var index = pending.length - 1; index >= 0; index--) {
+                try {
+                    await pending[index](String(event || 'unload'));
+                } catch (error) {
+                    try {
+                        console.error('[ToolPkg] unload handler failed:', error);
+                    } catch (_) {}
+                }
+            }
+        };
+
         var api = toolPkgApi.namespace('ToolPkg', {
             _m: captureMarketOrigin,
             // Captures only explicitly published methods using durable exported function references.
@@ -635,6 +668,19 @@ pub fn buildToolPkgRegistrationBridgeScript(restrictHostCapabilities: bool) -> S
                 capture.publicApis.push(normalizeSpec(normalized));
             },
             callDependency: toolPkgApi.callDependency,
+            // Registers a cleanup callback that runs before the package execution context is destroyed.
+            onUnload: registerUnloadHandler,
+            // Runs fn now and records its returned disposer as an unload handler.
+            effect: function(fn) {
+                if (typeof fn !== 'function') {
+                    throw new Error('ToolPkg.effect expects a function');
+                }
+                var disposer = fn();
+                if (typeof disposer === 'function') {
+                    registerUnloadHandler(disposer);
+                }
+                return disposer;
+            },
             registerToolboxUiModule: registerScreen('toolboxUiModules', 'registerToolPkgToolboxUiModule'),
             registerUiRoute: registerScreen('uiRoutes', 'registerToolPkgUiRoute'),
             registerChatComposerSlot: registerScreen('chatComposerSlots', 'registerToolPkgChatComposerSlot'),

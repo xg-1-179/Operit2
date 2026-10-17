@@ -586,6 +586,9 @@ pub trait JsExecutionEngine: Send + Sync {
         on_intermediate_result: Arc<dyn Fn(Value) + Send + Sync>,
     ) -> JsExecutionFuture<JsExecutionResult<Option<Value>>>;
 
+    /// Runs plugin lifecycle handlers (for example `unload`) before the engine is destroyed.
+    fn dispatch_lifecycle(&self, _event: &str) {}
+
     /// Destroys any engine resources owned by this handle.
     fn destroy(&self);
 }
