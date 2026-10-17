@@ -12,6 +12,7 @@ import 'package:operit2/core/proxy/generated/CoreProxyClients.g.dart';
 import 'package:operit2/core/proxy/generated/CoreProxyModels.g.dart'
     as core_proxy;
 import 'package:operit2/ui/features/packages/screens/PackageManagerScreen.dart';
+import 'package:operit2/ui/features/packages/screens/PluginTabContent.dart';
 import 'package:operit2/ui/features/packages/dialogs/PackageEnvironmentVariablesDialog.dart';
 import 'package:operit2/ui/main/navigation/ToolPkgCatalogChangeBus.dart';
 import 'package:operit2/ui/common/components/RetainedPage.dart';
@@ -32,11 +33,9 @@ void main() {
     addTearDown(bridge.revisions.close);
     await tester.pumpWidget(_manager(bridge));
     await tester.pumpAndSettle();
-    final labels = ['Saved Z', 'Saved A', 'New A', 'New Z'];
-    for (var i = 1; i < labels.length; i++) {
-      expect(tester.getTopLeft(find.text(labels[i])).dy,
-          greaterThan(tester.getTopLeft(find.text(labels[i - 1])).dy));
-    }
+    final tab = tester.widget<PluginTabContent>(find.byType(PluginTabContent));
+    expect(tab.plugins.map((plugin) => plugin.packageName),
+        ['saved_z', 'saved_a', 'new_a', 'new_z']);
     expect(tester.takeException(), isNull);
     expect(bridge.catalogReads, 1);
     expect(bridge.scans, 0);
@@ -422,7 +421,10 @@ class _CatalogBridge extends OperitRuntimeBridge {
         return <String, Object?>{};
       case 'getExtensionScopes':
         return installed
-            ? <String, Object?>{'demo_toolpkg': 'device'}
+            ? <String, Object?>{
+                for (final plugin in pluginFixtures ?? [_pluginRuntime()])
+                  plugin.packageName: 'device',
+              }
             : <String, Object?>{};
       case 'getExecutableAvailablePackages':
         return <String, Object?>{};
