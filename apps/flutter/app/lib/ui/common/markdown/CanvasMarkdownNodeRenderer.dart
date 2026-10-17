@@ -161,7 +161,7 @@ class _MarkdownTextState extends State<_MarkdownText>
     _revealAnimation = Tween<double>(
       begin: current,
       end: targetLength.toDouble(),
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.linear));
+    ).animate(_controller);
     _controller.forward(from: 0);
   }
 

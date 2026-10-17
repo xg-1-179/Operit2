@@ -75,8 +75,28 @@ jobs:
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings lib
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Run application rendering regressions
+      - name: Prepare application build hook dependencies
+        id: hook
         if: ${{ !cancelled() && steps.proxy.outcome == 'success' }}
+        shell: pwsh
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --prefix .ci-tools/typescript --no-audit --no-fund typescript@5.9.3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          corepack prepare pnpm@10.7.0 --activate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location plugins/packages/buildin/workflow
+          try {
+            corepack pnpm install --frozen-lockfile --prod=false
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+      - name: Run application rendering regressions
+        if: ${{ !cancelled() && steps.proxy.outcome == 'success' && steps.hook.outcome == 'success' }}
         shell: pwsh
         working-directory: apps/flutter/app
         run: |

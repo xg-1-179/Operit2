@@ -160,3 +160,20 @@ and plugin workload in both runs. No APK was built in this step.
   be profiled rather than claimed as a performance improvement.
 - No new APK, connected-device frame profiling or full-app UI redesign has
   been completed. DSH support remains partial as documented above.
+
+## Executed interaction checks and application hook prerequisites
+
+- Cloud run 39018374908 passed focused UI analysis and all 14 glass/popup
+  interaction tests, including interrupted gestures, disposal, restored card
+  translucency, reduced motion, RTL and retained menu content. App analysis
+  passed with existing non-fatal lints. All 26 Node regressions passed.
+- Application rendering tests did not start: the build hook could not find
+  the repository Python virtual environment. The performance workflow now
+  prepares it, TypeScript and the pinned workflow plugin dependencies using
+  the same prerequisites as the Android release workflow.
+- Linear streaming reveal now animates directly on the existing controller,
+  avoiding one undisposed CurvedAnimation per appended text update without
+  changing interpolation. The release workflow resolves FVM from PUB_CACHE
+  and includes the popup, Markdown and navigation regression suites.
+- These are source/test infrastructure changes, not a newly delivered APK or
+  measured Android frame-rate improvement. Device validation remains required.
