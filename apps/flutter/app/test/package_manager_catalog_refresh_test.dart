@@ -485,6 +485,7 @@ core_proxy.ToolPkgContainerRuntime _pluginRuntime({
   String displayName = 'Demo ToolPkg',
 }) {
   return core_proxy.ToolPkgContainerRuntime(
+    themes: [],
     chatLifecycleHooks: [],
     packageName: packageName,
     displayName: core_proxy.LocalizedText(

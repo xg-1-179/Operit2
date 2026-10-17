@@ -33,6 +33,30 @@ void main() {
     }
   });
 
+  testWidgets('fade-only navigation retires the outgoing page after its fade', (
+    tester,
+  ) async {
+    final selected = ValueNotifier<int>(0);
+    addTearDown(selected.dispose);
+    final counts = _PageCounts();
+    await _pumpMainPages(
+      tester,
+      selected,
+      counts,
+      enableNavigationAnimation: false,
+    );
+    await tester.pumpAndSettle();
+    selected.value = 1;
+    await tester.pump();
+    expect(find.text('Page 0: 0'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('Page 0: 0'), findsNothing);
+    expect(find.text('Page 1: 0'), findsOneWidget);
+    expect(TickerMode.valuesOf(tester.element(_probe(0))).enabled, isFalse);
+    expect(counts.initialized, <int>[1, 1, 0]);
+    expect(counts.disposed, <int>[0, 0, 0]);
+  });
+
   testWidgets('cached main pages remain mounted when hidden and restored', (
     tester,
   ) async {
@@ -238,6 +262,7 @@ Future<void> _pumpMainPages(
   ValueNotifier<int> selected,
   _PageCounts counts, {
   bool keepFirstPage = true,
+  bool enableNavigationAnimation = true,
 }) async {
   final layout = MainLayoutController();
   final topBar = TopBarController();
@@ -276,7 +301,7 @@ Future<void> _pumpMainPages(
             useTabletLayout: false,
             isTabletSidebarExpanded: false,
             canGoBack: false,
-            enableNavigationAnimation: true,
+            enableNavigationAnimation: enableNavigationAnimation,
             isNavigatingBack: false,
             topBarController: topBar,
             appBarEntries: const [],

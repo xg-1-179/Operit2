@@ -60,7 +60,7 @@ class _AppContentState extends State<AppContent> {
     milliseconds: 240,
   );
   static const Duration _disabledPageTransitionDuration = Duration(
-    milliseconds: 400,
+    milliseconds: 110,
   );
   static const double _phonePageTransitionOffset = 12;
   static const double _tabletPageTransitionOffset = 16;
@@ -211,6 +211,7 @@ class _AppContentState extends State<AppContent> {
 
   /// Returns the duration used to clean up the active transition.
   Duration get _activeTransitionDuration {
+    // Without translation, only the 110 ms exit fade needs an active page.
     return _pageTransitionDuration;
   }
 
